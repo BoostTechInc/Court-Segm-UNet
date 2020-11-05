@@ -3,6 +3,7 @@ import logging
 import os
 import sys
 from tqdm import tqdm
+import signal
 
 import torch
 import torch.nn as nn
@@ -175,6 +176,13 @@ if __name__ == '__main__':
 
     net.to(device=device)              # cudnn.benchmark = True: faster convolutions, but more memory
 
+    def save_model(a1=None, a2=None):
+        path = os.path.join(args.cp_dir, 'last.pth')
+        torch.save(net.state_dict(), path)
+        logging.info('Saved interrupt to {}'.format(path))
+        sys.exit(0)
+    signal.signal(signal.SIGINT, save_model)
+
     # Run training:
     try:
         if not os.path.exists(args.cp_dir):
@@ -193,9 +201,7 @@ if __name__ == '__main__':
                   target_size=args.size)
     except Exception as e:
         print (e)
-        path = os.path.join(args.cp_dir, 'last.pth')
-        torch.save(net.state_dict(), path)
-        logging.info('Saved interrupt to {}'.format(path))
+        save_model()
         try:
             sys.exit(0)
         except SystemExit:
