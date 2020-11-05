@@ -1,4 +1,4 @@
-from os.path import splitext
+import os
 from os import listdir
 import numpy as np
 from glob import glob
@@ -6,30 +6,44 @@ import torch
 from torch.utils.data import Dataset
 import logging
 from PIL import Image
+# import albumentations as A
+
+
+def split_on_train_val(img_dir, val_names):
+    '''
+    Split a dataset on training and validation ids
+    '''
+    names = [n for n in os.listdir(img_dir) if os.path.isdir(os.path.join(img_dir, n))]
+    train_ids = []
+    val_ids = []
+
+    for name in names:
+        subdir = os.path.join(img_dir, name)
+        ids = [os.path.join(name,file.split('.')[0])
+               for file in listdir(subdir) if not file.endswith('.')]
+        if any(name == n for n in val_names):
+            val_ids += ids
+        else:
+            train_ids += ids
+
+    logging.info(f'Data has been splitted. Train ids: {len(train_ids)}, val ids: {len(val_ids)}')
+    return train_ids, val_ids
 
 
 class BasicDataset(Dataset):
-    def __init__(self, imgs_dir, masks_dir, scale=1, mask_suffix=''):
-        self.imgs_dir = imgs_dir
-        self.masks_dir = masks_dir
-        self.scale = scale
-        self.mask_suffix = mask_suffix
-        assert 0 < scale <= 1, 'Scale must be between 0 and 1'
-
-        self.ids = [splitext(file)[0] for file in listdir(imgs_dir)
-                    if not file.startswith('.')]
-        logging.info(f'Creating dataset with {len(self.ids)} examples')
+    def __init__(self, ids, img_dir, mask_dir, num_classes=1, target_size=(1280,720)):
+        self.img_dir = img_dir
+        self.mask_dir = mask_dir
+        self.ids = ids
+        self.target_size = target_size
+        self.num_classes = num_classes
 
     def __len__(self):
         return len(self.ids)
 
     @classmethod
-    def preprocess(cls, pil_img, scale):
-        w, h = pil_img.size
-        newW, newH = int(scale * w), int(scale * h)
-        assert newW > 0 and newH > 0, 'Scale is too small'
-        pil_img = pil_img.resize((newW, newH))
-
+    def preprocess_img(cls, pil_img, target_size):
+        pil_img = pil_img.resize(target_size)
         img_nd = np.array(pil_img)
 
         if len(img_nd.shape) == 2:
@@ -40,32 +54,40 @@ class BasicDataset(Dataset):
         if img_trans.max() > 1:
             img_trans = img_trans / 255
 
-        return img_trans
+        # To tensor:
+        img_tensor = torch.from_numpy(img_trans).type(torch.FloatTensor)
+
+        return img_tensor
+
+    def preprocess_mask(self, pil_mask, target_size):
+        pil_mask = pil_mask.resize(target_size, resample=Image.NEAREST)
+        mask_nd = np.array(pil_mask)
+
+        # Prepare one hot label:
+        mask_tensor = torch.from_numpy(mask_nd).type(torch.LongTensor)
+        # mask_tensor = torch.nn.functional.one_hot(mask_tensor, self.num_classes)  # one hot label
+        # mask_tensor = mask_tensor.permute(2, 0, 1)     # HWC to CHW
+
+        return mask_tensor
 
     def __getitem__(self, i):
         idx = self.ids[i]
-        mask_file = glob(self.masks_dir + idx + self.mask_suffix + '.*')
-        img_file = glob(self.imgs_dir + idx + '.*')
+        mask_file = glob(self.mask_dir + idx + '.*')
+        img_file = glob(self.img_dir + idx + '.*')
 
         assert len(mask_file) == 1, \
-            f'Either no mask or multiple masks found for the ID {idx}: {mask_file}'
+            'Either no mask or multiple masks found for the ID {}: {}'.format(idx, mask_file)
         assert len(img_file) == 1, \
-            f'Either no image or multiple images found for the ID {idx}: {img_file}'
+            'Either no image or multiple images found for the ID {}: {}'.format(idx, img_file)
         mask = Image.open(mask_file[0])
         img = Image.open(img_file[0])
 
-        assert img.size == mask.size, \
-            f'Image and mask {idx} should be the same size, but are {img.size} and {mask.size}'
+        assert img is not None and mask is not None
 
-        img = self.preprocess(img, self.scale)
-        mask = self.preprocess(mask, self.scale)
+        img = self.preprocess_img(img, self.target_size)
+        mask = self.preprocess_mask(mask, self.target_size)
 
         return {
-            'image': torch.from_numpy(img).type(torch.FloatTensor),
-            'mask': torch.from_numpy(mask).type(torch.FloatTensor)
+            'image': img,
+            'mask': mask
         }
-
-
-class CarvanaDataset(BasicDataset):
-    def __init__(self, imgs_dir, masks_dir, scale=1):
-        super().__init__(imgs_dir, masks_dir, scale, mask_suffix='_mask')
