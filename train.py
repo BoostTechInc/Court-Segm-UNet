@@ -181,7 +181,7 @@ if __name__ == '__main__':
         torch.save(net.state_dict(), path)
         logging.info('Saved interrupt to {}'.format(path))
         sys.exit(0)
-    signal.signal(signal.SIGINT, save_model)
+    signal.signal(signal.SIGTERM, save_model)
 
     # Run training:
     try:
