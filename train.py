@@ -191,7 +191,8 @@ if __name__ == '__main__':
                   batch_size=args.batchsize,
                   lr=args.lr,
                   target_size=args.size)
-    except:
+    except Exception as e:
+        print (e)
         path = os.path.join(args.cp_dir, 'last.pth')
         torch.save(net.state_dict(), path)
         logging.info('Saved interrupt to {}'.format(path))
