@@ -4,7 +4,9 @@ import os
 import sys
 from tqdm import tqdm
 import signal
+import cv2
 
+import numpy as np
 import torch
 import torch.nn as nn
 from torch import optim
@@ -15,10 +17,14 @@ from torch.utils.data import DataLoader
 from eval import eval_net
 from unet import UNet
 from utils.conf_parser import parse_conf
+from utils.postprocess import preds_to_masks, mask_to_image
 
-
-def train_net(net, device, img_dir, mask_dir, val_names,  num_classes, cp_dir=None,
-              epochs=5, batch_size=1, lr=0.001, save_cp=True, target_size=(1280,720)):
+def train_net(net, device, img_dir, mask_dir, val_names,  num_classes,
+              cp_dir=None, log_dir=None, epochs=5, batch_size=1,
+              lr=0.001, target_size=(1280,720), vizualize=False):
+    '''
+    Train U-Net model
+    '''
     # Prepare dataset:
     train_ids, val_ids = split_on_train_val(img_dir, val_names)
     train = BasicDataset(train_ids, img_dir, mask_dir, num_classes, target_size)
@@ -28,7 +34,8 @@ def train_net(net, device, img_dir, mask_dir, val_names,  num_classes, cp_dir=No
     n_train = len(train)
     n_val = len(val)
 
-    writer = SummaryWriter(comment=f'LR_{lr}_BS_{batch_size}_SIZE_{target_size}')
+    writer = SummaryWriter(log_dir=log_dir,
+                           comment=f'LR_{lr}_BS_{batch_size}_SIZE_{target_size}_DECONV_{net.bilinear}')
     global_step = 0
 
     logging.info(f'''Starting training:
@@ -37,9 +44,13 @@ def train_net(net, device, img_dir, mask_dir, val_names,  num_classes, cp_dir=No
         Learning rate:   {lr}
         Training size:   {n_train}
         Validation size: {n_val}
-        Checkpoints:     {save_cp}
+        Images dir:      {img_dir}
+        Masks dir:       {mask_dir}
+        Checkpoints dir: {cp_dir}
+        Log dir:         {log_dir}
         Device:          {device.type}
-        Target size:  {target_size}
+        Input size:      {target_size}
+        Vizualize:       {vizualize}
     ''')
 
     optimizer = optim.RMSprop(net.parameters(), lr=lr, weight_decay=1e-8, momentum=0.9)
@@ -85,11 +96,12 @@ def train_net(net, device, img_dir, mask_dir, val_names,  num_classes, cp_dir=No
                         writer.add_histogram('weights/' + tag, value.data.cpu().numpy(), global_step)
                         writer.add_histogram('grads/' + tag, value.grad.data.cpu().numpy(), global_step)
 
-                    val_score = eval_net(net, val_loader, device)
-
+                    # Validation:
+                    result = eval_net(net, val_loader, device, verbose=vizualize)
+                    val_score = result['val_score']
                     scheduler.step(val_score)
-                    writer.add_scalar('learning_rate', optimizer.param_groups[0]['lr'], global_step)
 
+                    writer.add_scalar('learning_rate', optimizer.param_groups[0]['lr'], global_step)
                     if net.n_classes > 1:
                         logging.info('Validation cross entropy: {}'.format(val_score))
                         writer.add_scalar('Loss/test', val_score, global_step)
@@ -97,10 +109,17 @@ def train_net(net, device, img_dir, mask_dir, val_names,  num_classes, cp_dir=No
                         logging.info('Validation Dice Coeff: {}'.format(val_score))
                         writer.add_scalar('Dice/test', val_score, global_step)
 
-                    writer.add_images('images', imgs, global_step)
-                    if net.n_classes == 1:
-                        writer.add_images('masks/true', true_masks, global_step)
-                        writer.add_images('masks/pred', torch.sigmoid(masks_pred) > 0.5, global_step)
+                    if vizualize:
+                        # Postprocess predicted mask for tensorboard vizualization:
+                        pred_masks = preds_to_masks(result['preds'], net.n_classes)
+                        pred_masks = mask_to_image(pred_masks)
+                        pred_masks = np.transpose(pred_masks, (0, 3, 1, 2))
+                        pred_masks = pred_masks.astype(np.float32) / 255.0
+                        pred_masks = pred_masks[...,::-1]
+
+                        # Save the results for tensorboard vizualization:
+                        writer.add_images('imgs', result['imgs'], global_step)
+                        writer.add_images('preds', pred_masks, global_step)
 
         if cp_dir is not None:
             try:
@@ -116,16 +135,17 @@ def train_net(net, device, img_dir, mask_dir, val_names,  num_classes, cp_dir=No
 
 
 def get_args():
-    parser = argparse.ArgumentParser(description='Train the UNet on images and target masks',
-                                     formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser = argparse.ArgumentParser(description='Train the UNet')
     parser.add_argument('-id', '--img_dir', dest='img_dir', type=str, default=None,
                         help='Path to dir containing traininmg images')
     parser.add_argument('-md', '--mask_dir', dest='mask_dir', type=str, default=None,
                         help='Path to dir containing masks for given images')
-    parser.add_argument('-cd', '--cp_dir', dest='cp_dir', type=str, default=None,
-                        help='Path for saving checkpoints')
     parser.add_argument('-vn', '--val_names', dest='val_names', type=str, default=None,
                         help='List of video names that will be used in validation step')
+    parser.add_argument('-cd', '--cp_dir', dest='cp_dir', type=str, default=None,
+                        help='Path for saving checkpoints')
+    parser.add_argument('-ld', '--log_dir', dest='log_dir', type=str, default=None,
+                        help='Path for saving tensorboard logs')
     parser.add_argument('-e', '--epochs', metavar='E', type=int, default=5,
                         help='Number of epochs', dest='epochs')
     parser.add_argument('-b', '--batch-size', metavar='B', type=int, nargs='?', default=8,
@@ -145,6 +165,9 @@ def get_args():
                         default=False)
     parser.add_argument('-c', '--conf_path', dest='conf_path', type=str, default=None,
                         help='Load config from a .yaml file')
+    parser.add_argument('--viz', '-v', action='store_true',
+                        help="Visualize the images as they are processed",
+                        default=False)
 
     return parser.parse_args()
 
@@ -160,6 +183,7 @@ if __name__ == '__main__':
             if k in conf:
                 setattr(args, k, conf[k])
 
+    # CUDA or CPU:
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     logging.info(f'Using device {device}')
 
@@ -170,12 +194,14 @@ if __name__ == '__main__':
                  f'\t{net.n_classes} output channels (classes)\n'
                  f'\t{"Bilinear" if net.bilinear else "Transposed conv"} upscaling')
 
+    # Restore the model from a checkpoint:
     if args.load:
         net.load_state_dict(torch.load(args.load, map_location=device))
         logging.info(f'Model loaded from {args.load}')
 
     net.to(device=device)              # cudnn.benchmark = True: faster convolutions, but more memory
 
+    # Define save model function:
     def save_model(a1=None, a2=None):
         path = os.path.join(args.cp_dir, 'last.pth')
         torch.save(net.state_dict(), path)
@@ -185,8 +211,8 @@ if __name__ == '__main__':
 
     # Run training:
     try:
-        if not os.path.exists(args.cp_dir):
-            os.makedirs(args.cp_dir)
+        if not os.path.exists(args.cp_dir): os.makedirs(args.cp_dir)
+        if not os.path.exists(args.log_dir): os.makedirs(args.log_dir)
 
         train_net(net=net,
                   device=device,
@@ -194,11 +220,13 @@ if __name__ == '__main__':
                   mask_dir=args.mask_dir,
                   val_names=args.val_names,
                   cp_dir=args.cp_dir,
+                  log_dir=args.log_dir,
                   num_classes=args.n_classes,
                   epochs=args.epochs,
                   batch_size=args.batchsize,
                   lr=args.lr,
-                  target_size=args.size)
+                  target_size=args.size,
+                  vizualize=args.viz)
     except Exception as e:
         print (e)
         save_model()

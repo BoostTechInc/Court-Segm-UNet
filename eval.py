@@ -1,20 +1,18 @@
 import torch
 import torch.nn.functional as F
-from tqdm import tqdm
-
 from dice_loss import dice_coeff
 
 
-def eval_net(net, loader, device):
+def eval_net(net, loader, device, verbose=False):
     """Evaluation without the densecrf with the dice coefficient"""
     net.eval()
     mask_type = torch.float32 if net.n_classes == 1 else torch.long
     n_val = len(loader)  # the number of batch
     tot = 0
+    imgs, mask_pred = None, None
 
     print ('\nStarting validation...\n')
 
-    #with tqdm(total=n_val, desc='Validation round', unit='batch') as pbar:
     for batch in loader:
         imgs, true_masks = batch['image'], batch['mask']
         imgs = imgs.to(device=device, dtype=torch.float32)
@@ -30,7 +28,11 @@ def eval_net(net, loader, device):
             pred = (pred > 0.5).float()
             tot += dice_coeff(pred, true_masks).item()
 
-            #pbar.update()
-
     net.train()
-    return tot / n_val
+
+    result = {'val_score': tot/n_val}
+    if verbose:
+        result['imgs'] = imgs.cpu()
+        result['preds'] = mask_pred.cpu()
+
+    return result

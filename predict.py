@@ -2,58 +2,34 @@ import argparse
 import logging
 import os
 
-import numpy as np
 import torch
-import torch.nn.functional as F
 from PIL import Image
-from torchvision import transforms
+import cv2
 
 from unet import UNet
-from utils.data_vis import plot_img_and_mask
 from utils.dataset import BasicDataset
+from utils.postprocess import preds_to_masks, mask_to_image
 
 
 def predict_img(net,
                 full_img,
                 device,
-                input_size,
-                out_threshold=0.5):
+                input_size):
     net.eval()
 
     img = BasicDataset.preprocess_img(full_img, input_size)
-
     img = img.unsqueeze(0)
     img = img.to(device=device, dtype=torch.float32)
 
     with torch.no_grad():
-        output = net(img)
+        preds = net(img)
+        masks = preds_to_masks(preds, net.n_classes)    # GPU tensor -> CPU numpy
 
-        if net.n_classes > 1:
-            probs = F.softmax(output, dim=1)
-            probs = torch.argmax(probs, dim=1)
-        else:
-            probs = torch.sigmoid(output)
-
-        probs = probs.squeeze(0)
-        probs = probs.type(torch.IntTensor)
-
-        tf = transforms.Compose(
-            [
-                transforms.ToPILImage(),
-                transforms.Resize((full_img.size[1],full_img.size[0]), interpolation=Image.NEAREST),
-                transforms.ToTensor()
-            ]
-        )
-
-        probs = tf(probs.cpu())
-        full_mask = probs.squeeze().cpu().numpy()
-
-    return full_mask# > out_threshold
+    return masks
 
 
 def get_args():
-    parser = argparse.ArgumentParser(description='Predict masks from input images',
-                                     formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser = argparse.ArgumentParser(description='Predict masks from input images')
     parser.add_argument('--model', '-m', default='MODEL.pth',
                         metavar='FILE',
                         help="Specify the file in which the model is stored")
@@ -68,12 +44,6 @@ def get_args():
     parser.add_argument('--viz', '-v', action='store_true',
                         help="Visualize the images as they are processed",
                         default=False)
-    parser.add_argument('--no-save', '-n', action='store_true',
-                        help="Do not save the output masks",
-                        default=False)
-    parser.add_argument('--mask-threshold', '-t', type=float,
-                        help="Minimum probability value to consider a mask pixel white",
-                        default=0.5)
 
     return parser.parse_args()
 
@@ -95,19 +65,6 @@ def get_output_filenames(args):
     return out_files
 
 
-def mask_to_image(mask, to_rgb=True):
-    if to_rgb:
-        mask = np.expand_dims(mask, 2)
-        rgb_mask = np.zeros((mask.shape[0],mask.shape[1],3), dtype=np.uint8)
-        rgb_mask[np.all(mask == 1, axis=2),:] = (0, 255, 0)
-        rgb_mask[np.all(mask == 2, axis=2),:] = (255, 0, 0)
-        rgb_mask[np.all(mask == 3, axis=2),:] = (0, 0, 255)
-        rgb_mask[np.all(mask == 4, axis=2),:] = (255, 255, 255)
-        mask = rgb_mask[...,::-1]
-
-    return Image.fromarray((mask).astype(np.uint8))
-
-
 def get_img_paths(src_dir, dst_dir=None):
     names = [file for file in os.listdir(src_dir) if not file.endswith('.')]
     input_paths = [os.path.join(src_dir, n) for n in names]
@@ -121,42 +78,42 @@ def get_img_paths(src_dir, dst_dir=None):
 
 if __name__ == "__main__":
     args = get_args()
-    args.model = '/home/darkalert/builds/Pytorch-UNet/checkpoints/Nov04_20-20-59_DeepLearningLR_0.0001_BS_8_SIZE_(640, 360)/checkpointsCP_epoch1.pth'
+    args.model = '/home/darkalert/builds/Court-Segm-UNet/checkpoints/Nov04_20-20-59_DeepLearningLR_0.0001_BS_8_SIZE_(640, 360)/checkpointsCP_last.pth'
     args.src_dir = '/media/darkalert/c02b53af-522d-40c5-b824-80dfb9a11dbb/boost/datasets/court_segmentation/NCAAM/frames/ElijahHardy_0_Transition_PossessionsAndAssists_Offense_2019-2020_NCAAM/'
-    args.dst_dir = '/media/darkalert/c02b53af-522d-40c5-b824-80dfb9a11dbb/boost/datasets/court_segmentation/NCAAM/preds/ElijahHardy_0_Transition_PossessionsAndAssists_Offense_2019-2020_NCAAM/'
+    args.dst_dir = '/media/darkalert/c02b53af-522d-40c5-b824-80dfb9a11dbb/boost/datasets/court_segmentation/NCAAM/preds2/ElijahHardy_0_Transition_PossessionsAndAssists_Offense_2019-2020_NCAAM/'
 
+    args.src_dir = '/media/darkalert/c02b53af-522d-40c5-b824-80dfb9a11dbb/boost/datasets/court_segmentation/NCAAM_2/frames/123/'
+    args.dst_dir = '/media/darkalert/c02b53af-522d-40c5-b824-80dfb9a11dbb/boost/datasets/court_segmentation/NCAAM_2/preds/123/'
 
+    # Get paths:
     input_paths, output_paths = get_img_paths(args.src_dir, args.dst_dir)
     if not os.path.exists(args.dst_dir): os.makedirs(args.dst_dir)
 
+    # Load model:
     net = UNet(n_channels=3, n_classes=args.n_classes)
-
     logging.info("Loading model {}".format(args.model))
-
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     logging.info(f'Using device {device}')
     net.to(device=device)
     net.load_state_dict(torch.load(args.model, map_location=device))
-
     logging.info("Model loaded !")
 
+    # Loop over all images:
     for i, (in_path, out_path) in enumerate(zip(input_paths, output_paths)):
         logging.info("\nPredicting image {} ...".format(in_path))
 
+        # Open image:
         img = Image.open(in_path)
+        img_size = (img.size[0], img.size[1])
 
-        mask = predict_img(net=net,
-                           full_img=img,
-                           input_size=args.input_size,
-                           out_threshold=args.mask_threshold,
-                           device=device)
+        # Predict:
+        mask = predict_img(net=net, full_img=img, input_size=args.input_size, device=device)
 
-        if not args.no_save:
-            result = mask_to_image(mask)
-            result.save(out_path)
+        # Postprocessing:
+        rgb_mask = mask_to_image(mask)[0]
+        if rgb_mask.shape[0] != img_size[0] or rgb_mask.size[1] != img_size[1]:
+            rgb_mask = cv2.resize(rgb_mask, img_size, interpolation=cv2.INTER_NEAREST)
 
-            logging.info("Mask saved to {}".format(out_path))
-
-        if args.viz:
-            logging.info("Visualizing results for image {}, close to continue ...".format(in_path))
-            plot_img_and_mask(img, mask)
+        # Save:
+        cv2.imwrite(out_path, rgb_mask)
+        logging.info("Mask saved to {}".format(out_path))
