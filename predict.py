@@ -80,31 +80,7 @@ def get_img_paths(src_dir, dst_dir=None):
         return input_paths
 
 
-if __name__ == "__main__":
-    args = get_args()
-
-    # args.bilinear = True
-    # args.model = '/home/darkalert/builds/Court-Segm-UNet/checkpoints/t_640x360_bilinear/checkpointsCP_last.pth'
-
-    args.bilinear = False
-    args.model = '/home/darkalert/builds/Court-Segm-UNet/checkpoints/t_640x360_deconv/CP_epoch5.pth'
-
-
-    args.src_dir = '/media/darkalert/c02b53af-522d-40c5-b824-80dfb9a11dbb/boost/datasets/court_segmentation/NCAAM/frames_test/CalvinKeyes_Transition_PossessionsAndAssists_Offense_2018-2019_NCAAM/'
-    args.dst_dir = '/media/darkalert/c02b53af-522d-40c5-b824-80dfb9a11dbb/boost/datasets/court_segmentation/NCAAM/preds/t_640x360_deconv/CalvinKeyes_Transition_PossessionsAndAssists_Offense_2018-2019_NCAAM/'
-
-    # Get paths:
-    input_paths, output_paths = get_img_paths(args.src_dir, args.dst_dir)
-    if not os.path.exists(args.dst_dir): os.makedirs(args.dst_dir)
-
-    # Load model:
-    net = UNet(n_channels=3, n_classes=args.n_classes, bilinear=args.bilinear)
-    logging.info("Loading model {}".format(args.model))
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    logging.info(f'Using device {device}')
-    net.to(device=device)
-    net.load_state_dict(torch.load(args.model, map_location=device))
-    logging.info("Model loaded !")
+def test(net, input_paths, output_paths, input_size):
 
     # Loop over all images:
     with tqdm(total=len(input_paths), desc='predicting', unit='img') as pbar:
@@ -116,7 +92,7 @@ if __name__ == "__main__":
             img_size = (img.size[0], img.size[1])
 
             # Predict:
-            mask = predict_img(net=net, full_img=img, input_size=args.input_size, device=device)
+            mask = predict_img(net=net, full_img=img, input_size=input_size, device=device)
 
             # Postprocessing:
             rgb_mask = mask_to_image(mask)[0]
@@ -128,5 +104,39 @@ if __name__ == "__main__":
             logging.info("Mask saved to {}".format(out_path))
 
             pbar.update()
+
+    print ('Done!')
+
+
+if __name__ == "__main__":
+    args = get_args()
+    args.model = '/home/darkalert/builds/Court-Segm-UNet/checkpoints/t_640x360_bilinear/checkpointsCP_last.pth'
+    args.src_dir = '/media/darkalert/c02b53af-522d-40c5-b824-80dfb9a11dbb/boost/datasets/court_segmentation/NCAAM/frames_test/'
+    args.dst_dir = '/media/darkalert/c02b53af-522d-40c5-b824-80dfb9a11dbb/boost/datasets/court_segmentation/NCAAM/preds/t_640x360_bilinear/'
+    args.bilinear = True
+
+    # Get videos:
+    video_names = [n for n in os.listdir(args.src_dir) if os.path.isdir(os.path.join(args.src_dir, n))]
+
+    # Load model:
+    net = UNet(n_channels=3, n_classes=args.n_classes, bilinear=args.bilinear)
+    logging.info("Loading model {}".format(args.model))
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    logging.info(f'Using device {device}')
+    net.to(device=device)
+    net.load_state_dict(torch.load(args.model, map_location=device))
+    logging.info("Model loaded !")
+
+    # Loop over all videos:
+    for name in video_names:
+        print('Processing {}...'.format(name))
+
+        # Get paths:
+        src_dir = os.path.join(args.src_dir, name)
+        dst_dir = os.path.join(args.dst_dir, name)
+        if not os.path.exists(dst_dir): os.makedirs(dst_dir)
+        input_paths, output_paths = get_img_paths(src_dir, dst_dir)
+
+        test(net, input_paths, output_paths, args.input_size)
 
     print ('All done!')
