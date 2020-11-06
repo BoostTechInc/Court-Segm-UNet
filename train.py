@@ -19,7 +19,7 @@ from unet import UNet
 from utils.conf_parser import parse_conf
 from utils.postprocess import preds_to_masks, mask_to_image
 
-def train_net(net, device, img_dir, mask_dir, val_names,  num_classes,
+def train_net(net, device, img_dir, mask_dir, val_names,  num_classes, opt='RMSprop',
               cp_dir=None, log_dir=None, epochs=5, batch_size=1,
               lr=0.001, target_size=(1280,720), vizualize=False):
     '''
@@ -53,8 +53,17 @@ def train_net(net, device, img_dir, mask_dir, val_names,  num_classes,
         Vizualize:       {vizualize}
     ''')
 
-    optimizer = optim.RMSprop(net.parameters(), lr=lr, weight_decay=1e-8, momentum=0.9)
-    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min' if net.n_classes > 1 else 'max', patience=2)
+    if opt == 'RMSprop':
+        optimizer = optim.RMSprop(net.parameters(), lr=lr, weight_decay=1e-8, momentum=0.9)
+    elif opt == 'SGD':
+        optimizer = optim.SGD(net.parameters(), lr=lr, weight_decay=1e-8, momentum=0.9)
+    elif opt == 'Adam':
+        optimizer = optim.Adam(net.parameters(), lr=lr, betas=(0.9, 0.999), weight_decay=1e-8)
+    else:
+        print ('optimizer {} does not support yet'.format(opt))
+        raise NotImplementedError
+
+    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min' if net.n_classes > 1 else 'max', patience=3)
     if net.n_classes > 1:
         criterion = nn.CrossEntropyLoss()
     else:
@@ -168,6 +177,8 @@ def get_args():
     parser.add_argument('--viz', '-v', action='store_true',
                         help="Visualize the images as they are processed",
                         default=False)
+    parser.add_argument('-o', '--opt', dest='opt', type=str, default='RMSprop',
+                        help='Optimizer for training')
 
     return parser.parse_args()
 
@@ -222,6 +233,7 @@ if __name__ == '__main__':
                   cp_dir=args.cp_dir,
                   log_dir=args.log_dir,
                   num_classes=args.n_classes,
+                  opt=args.opt,
                   epochs=args.epochs,
                   batch_size=args.batchsize,
                   lr=args.lr,
