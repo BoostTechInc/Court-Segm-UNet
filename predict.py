@@ -5,6 +5,7 @@ import os
 import torch
 from PIL import Image
 import cv2
+from tqdm import tqdm
 
 from unet import UNet
 from utils.dataset import BasicDataset
@@ -44,6 +45,9 @@ def get_args():
     parser.add_argument('--viz', '-v', action='store_true',
                         help="Visualize the images as they are processed",
                         default=False)
+    parser.add_argument('--bilinear', '-bl', action='store_true',
+                        help="Use bilinear interpolation (True) or deconvolution",
+                        default=False)
 
     return parser.parse_args()
 
@@ -78,19 +82,23 @@ def get_img_paths(src_dir, dst_dir=None):
 
 if __name__ == "__main__":
     args = get_args()
-    args.model = '/home/darkalert/builds/Court-Segm-UNet/checkpoints/Nov04_20-20-59_DeepLearningLR_0.0001_BS_8_SIZE_(640, 360)/checkpointsCP_last.pth'
-    args.src_dir = '/media/darkalert/c02b53af-522d-40c5-b824-80dfb9a11dbb/boost/datasets/court_segmentation/NCAAM/frames/ElijahHardy_0_Transition_PossessionsAndAssists_Offense_2019-2020_NCAAM/'
-    args.dst_dir = '/media/darkalert/c02b53af-522d-40c5-b824-80dfb9a11dbb/boost/datasets/court_segmentation/NCAAM/preds2/ElijahHardy_0_Transition_PossessionsAndAssists_Offense_2019-2020_NCAAM/'
 
-    args.src_dir = '/media/darkalert/c02b53af-522d-40c5-b824-80dfb9a11dbb/boost/datasets/court_segmentation/NCAAM_2/frames/123/'
-    args.dst_dir = '/media/darkalert/c02b53af-522d-40c5-b824-80dfb9a11dbb/boost/datasets/court_segmentation/NCAAM_2/preds/123/'
+    # args.bilinear = True
+    # args.model = '/home/darkalert/builds/Court-Segm-UNet/checkpoints/t_640x360_bilinear/checkpointsCP_last.pth'
+
+    args.bilinear = False
+    args.model = '/home/darkalert/builds/Court-Segm-UNet/checkpoints/t_640x360_deconv/CP_epoch5.pth'
+
+
+    args.src_dir = '/media/darkalert/c02b53af-522d-40c5-b824-80dfb9a11dbb/boost/datasets/court_segmentation/NCAAM/frames_test/CalvinKeyes_Transition_PossessionsAndAssists_Offense_2018-2019_NCAAM/'
+    args.dst_dir = '/media/darkalert/c02b53af-522d-40c5-b824-80dfb9a11dbb/boost/datasets/court_segmentation/NCAAM/preds/t_640x360_deconv/CalvinKeyes_Transition_PossessionsAndAssists_Offense_2018-2019_NCAAM/'
 
     # Get paths:
     input_paths, output_paths = get_img_paths(args.src_dir, args.dst_dir)
     if not os.path.exists(args.dst_dir): os.makedirs(args.dst_dir)
 
     # Load model:
-    net = UNet(n_channels=3, n_classes=args.n_classes)
+    net = UNet(n_channels=3, n_classes=args.n_classes, bilinear=args.bilinear)
     logging.info("Loading model {}".format(args.model))
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     logging.info(f'Using device {device}')
@@ -99,21 +107,26 @@ if __name__ == "__main__":
     logging.info("Model loaded !")
 
     # Loop over all images:
-    for i, (in_path, out_path) in enumerate(zip(input_paths, output_paths)):
-        logging.info("\nPredicting image {} ...".format(in_path))
+    with tqdm(total=len(input_paths), desc='predicting', unit='img') as pbar:
+        for i, (in_path, out_path) in enumerate(zip(input_paths, output_paths)):
+            logging.info("\nPredicting image {} ...".format(in_path))
 
-        # Open image:
-        img = Image.open(in_path)
-        img_size = (img.size[0], img.size[1])
+            # Open image:
+            img = Image.open(in_path)
+            img_size = (img.size[0], img.size[1])
 
-        # Predict:
-        mask = predict_img(net=net, full_img=img, input_size=args.input_size, device=device)
+            # Predict:
+            mask = predict_img(net=net, full_img=img, input_size=args.input_size, device=device)
 
-        # Postprocessing:
-        rgb_mask = mask_to_image(mask)[0]
-        if rgb_mask.shape[0] != img_size[0] or rgb_mask.size[1] != img_size[1]:
-            rgb_mask = cv2.resize(rgb_mask, img_size, interpolation=cv2.INTER_NEAREST)
+            # Postprocessing:
+            rgb_mask = mask_to_image(mask)[0]
+            if rgb_mask.shape[0] != img_size[0] or rgb_mask.size[1] != img_size[1]:
+                rgb_mask = cv2.resize(rgb_mask, img_size, interpolation=cv2.INTER_NEAREST)
 
-        # Save:
-        cv2.imwrite(out_path, rgb_mask)
-        logging.info("Mask saved to {}".format(out_path))
+            # Save:
+            cv2.imwrite(out_path, rgb_mask)
+            logging.info("Mask saved to {}".format(out_path))
+
+            pbar.update()
+
+    print ('All done!')
