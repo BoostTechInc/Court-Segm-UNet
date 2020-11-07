@@ -39,6 +39,7 @@ def train_net(net, device, img_dir, mask_dir, val_names,  num_classes, opt='RMSp
     global_step = 0
 
     logging.info(f'''Starting training:
+        Optimizer:       {opt}
         Epochs:          {epochs}
         Batch size:      {batch_size}
         Learning rate:   {lr}
