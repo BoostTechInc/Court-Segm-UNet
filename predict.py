@@ -69,19 +69,21 @@ def get_output_filenames(args):
     return out_files
 
 
-def get_img_paths(src_dir, dst_dir=None):
+def get_img_paths(src_dir, dst_dir=None, png=True):
     names = [file for file in os.listdir(src_dir) if not file.endswith('.')]
     input_paths = [os.path.join(src_dir, n) for n in names]
 
     if dst_dir is not None:
-        output_paths = [os.path.join(dst_dir, n) for n in names]
+        if png:
+            output_paths = [os.path.join(dst_dir, n.split('.')[0]+'.png') for n in names]
+        else:
+            output_paths = [os.path.join(dst_dir, n) for n in names]
         return input_paths, output_paths
     else:
         return input_paths
 
 
 def test(net, input_paths, output_paths, input_size):
-
     # Loop over all images:
     with tqdm(total=len(input_paths), desc='predicting', unit='img') as pbar:
         for i, (in_path, out_path) in enumerate(zip(input_paths, output_paths)):
@@ -112,11 +114,13 @@ if __name__ == "__main__":
     args = get_args()
     args.model = '/home/darkalert/builds/Court-Segm-UNet/checkpoints/t_640x360_bilinear/checkpointsCP_last.pth'
     args.src_dir = '/media/darkalert/c02b53af-522d-40c5-b824-80dfb9a11dbb/boost/datasets/court_segmentation/NCAAM/frames_test/'
-    args.dst_dir = '/media/darkalert/c02b53af-522d-40c5-b824-80dfb9a11dbb/boost/datasets/court_segmentation/NCAAM/preds/t_640x360_bilinear/'
+    args.dst_dir = '/media/darkalert/c02b53af-522d-40c5-b824-80dfb9a11dbb/boost/datasets/court_segmentation/NCAAM/_test/preds/t_640x360_bilinear/'
     args.bilinear = True
+    args.n_classes = 5
 
     # Get videos:
     video_names = [n for n in os.listdir(args.src_dir) if os.path.isdir(os.path.join(args.src_dir, n))]
+    video_names = ['train_JadenMcDaniels_0_Isolation_IncludingPasses_Offense_2019-2020_NCAAM']
 
     # Load model:
     net = UNet(n_channels=3, n_classes=args.n_classes, bilinear=args.bilinear)

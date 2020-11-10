@@ -4,14 +4,13 @@ import os
 import sys
 from tqdm import tqdm
 import signal
-import cv2
 
 import numpy as np
 import torch
 import torch.nn as nn
 from torch import optim
 from torch.utils.tensorboard import SummaryWriter
-from utils.dataset import BasicDataset, split_on_train_val
+from utils.dataset import BasicDataset, split_on_train_val, worker_init_fn
 from torch.utils.data import DataLoader
 
 from eval import eval_net
@@ -20,17 +19,19 @@ from utils.conf_parser import parse_conf
 from utils.postprocess import preds_to_masks, mask_to_image
 
 def train_net(net, device, img_dir, mask_dir, val_names,  num_classes, opt='RMSprop',
-              cp_dir=None, log_dir=None, epochs=5, batch_size=1,
+              aug=None, cp_dir=None, log_dir=None, epochs=5, batch_size=1,
               lr=0.001, target_size=(1280,720), vizualize=False):
     '''
     Train U-Net model
     '''
     # Prepare dataset:
     train_ids, val_ids = split_on_train_val(img_dir, val_names)
-    train = BasicDataset(train_ids, img_dir, mask_dir, num_classes, target_size)
+    train = BasicDataset(train_ids, img_dir, mask_dir, num_classes, target_size, aug=aug)
     val = BasicDataset(val_ids, img_dir, mask_dir, num_classes, target_size)
-    train_loader = DataLoader(train, batch_size=batch_size, shuffle=True, num_workers=8, pin_memory=True)
-    val_loader = DataLoader(val, batch_size=batch_size, shuffle=False, num_workers=8, pin_memory=True, drop_last=True)
+    train_loader = DataLoader(train, batch_size=batch_size, shuffle=True, num_workers=8,
+                              pin_memory=True, worker_init_fn=worker_init_fn)
+    val_loader = DataLoader(val, batch_size=batch_size, shuffle=False, num_workers=8,
+                            pin_memory=True, drop_last=True)
     n_train = len(train)
     n_val = len(val)
 
@@ -52,6 +53,7 @@ def train_net(net, device, img_dir, mask_dir, val_names,  num_classes, opt='RMSp
         Device:          {device.type}
         Input size:      {target_size}
         Vizualize:       {vizualize}
+        Augmentation:    {aug}
     ''')
 
     if opt == 'RMSprop':
@@ -180,6 +182,8 @@ def get_args():
                         default=False)
     parser.add_argument('-o', '--opt', dest='opt', type=str, default='RMSprop',
                         help='Optimizer for training')
+    parser.add_argument('-a', '--aug', dest='aug', type=str, default=None,
+                        help='Augmentation')
 
     return parser.parse_args()
 
@@ -194,6 +198,8 @@ if __name__ == '__main__':
         for k in vars(args).keys():
             if k in conf:
                 setattr(args, k, conf[k])
+        if 'aug' in conf:
+            args.aug = conf['aug']
 
     # CUDA or CPU:
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -234,14 +240,14 @@ if __name__ == '__main__':
                   cp_dir=args.cp_dir,
                   log_dir=args.log_dir,
                   num_classes=args.n_classes,
+                  aug=args.aug,
                   opt=args.opt,
                   epochs=args.epochs,
                   batch_size=args.batchsize,
                   lr=args.lr,
                   target_size=args.size,
                   vizualize=args.viz)
-    except Exception as e:
-        print (e)
+    except KeyboardInterrupt:
         save_model()
         try:
             sys.exit(0)

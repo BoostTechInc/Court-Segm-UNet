@@ -6,8 +6,15 @@ import torch
 from torch.utils.data import Dataset
 import logging
 from PIL import Image
-# import albumentations as A
+from utils.augmentation import make_apperance_transform, make_geometric_transform, apply_transforms
 
+
+def worker_init_fn(worker_id):
+    '''
+    Use this function to set the numpy seed of each worker
+    For example, loader = DataLoader(..., worker_init_fn=worker_init_fn)
+    '''
+    np.random.seed(np.random.get_state()[1][0] + worker_id)
 
 def split_on_train_val(img_dir, val_names):
     '''
@@ -31,12 +38,18 @@ def split_on_train_val(img_dir, val_names):
 
 
 class BasicDataset(Dataset):
-    def __init__(self, ids, img_dir, mask_dir, num_classes=1, target_size=(1280,720)):
+    def __init__(self, ids, img_dir, mask_dir, num_classes=1, target_size=(1280,720), aug=None):
         self.img_dir = img_dir
         self.mask_dir = mask_dir
         self.ids = ids
         self.target_size = target_size
         self.num_classes = num_classes
+        self.aug = aug
+
+        # Get transforms:
+        if self.aug is not None:
+            self.TF_apperance = make_apperance_transform(self.aug)
+            self.TF_geometric = make_geometric_transform(self.aug, target_size[0], target_size[1])
 
     def __len__(self):
         return len(self.ids)
@@ -62,30 +75,36 @@ class BasicDataset(Dataset):
     def preprocess_mask(self, pil_mask, target_size):
         pil_mask = pil_mask.resize(target_size, resample=Image.NEAREST)
         mask_nd = np.array(pil_mask)
-
-        # Prepare one hot label:
         mask_tensor = torch.from_numpy(mask_nd).type(torch.LongTensor)
-        # mask_tensor = torch.nn.functional.one_hot(mask_tensor, self.num_classes)  # one hot label
-        # mask_tensor = mask_tensor.permute(2, 0, 1)     # HWC to CHW
 
         return mask_tensor
 
     def __getitem__(self, i):
         idx = self.ids[i]
+
+        # Get image and mask paths:
         mask_file = glob(self.mask_dir + idx + '.*')
         img_file = glob(self.img_dir + idx + '.*')
-
         assert len(mask_file) == 1, \
             'Either no mask or multiple masks found for the ID {}: {}'.format(idx, mask_file)
         assert len(img_file) == 1, \
             'Either no image or multiple images found for the ID {}: {}'.format(idx, img_file)
+
+        # Open image and mask:
         mask = Image.open(mask_file[0])
         img = Image.open(img_file[0])
-
         assert img is not None and mask is not None
 
+        # Preprocess image and mask:
         img = self.preprocess_img(img, self.target_size)
         mask = self.preprocess_mask(mask, self.target_size)
+
+        # Augmentation:
+        if self.aug is not None:
+            img, mask = apply_transforms(img, mask, self.TF_apperance, self.TF_geometric)
+
+        if mask.ndim == 3:
+            mask = mask.squeeze(0)        # [1,h,w] -> [h,w]
 
         return {
             'image': img,
