@@ -6,38 +6,50 @@ from PIL import Image
 
 
 def make_apperance_transform(aug):
-    # Params by default:
-    brightness = 0.35
-    contrast = 0.35
-    saturation = 0.25
-    hue = 0.25
+    '''
+    Make apperance transformations for data augmentation
+    '''
+    assert aug is not None
+    trans = []
 
-    # Set params from aug:
-    if 'brightness' in aug: brightness = aug['brightness']
-    if 'contrast' in aug: contrast = aug['contrast']
-    if 'saturation' in aug: saturation = aug['saturation']
-    if 'hue' in aug: hue = aug['hue']
+    # Select transformations:
+    if 'jitter' in aug:
+        brightness = 0.35                # params by default
+        contrast = 0.35
+        saturation = 0.25
+        hue = 0.25
+        jitter = aug['jitter']
+        if 'brightness' in jitter: brightness = jitter['brightness']
+        if 'contrast' in jitter: contrast = jitter['contrast']
+        if 'saturation' in jitter: saturation = jitter['saturation']
+        if 'hue' in jitter: hue = jitter['hue']
+        trans.append(transforms.ColorJitter(brightness=brightness,
+                                            contrast=contrast,
+                                            saturation=saturation,
+                                            hue=hue))
+    if 'blur' in aug:
+        kernel_size = aug['blur']
+        trans.append(transforms.GaussianBlur(kernel_size))
 
-    TF = transforms.Compose(
-        [
-            transforms.ColorJitter(brightness=brightness, contrast=contrast, saturation=saturation, hue=hue),
-            transforms.GaussianBlur(5),
-        ]
-    )
+    assert len(trans) > 0, \
+    'List of apperance transformations is empty. If you do not want '\
+    'to use any apperance transformations, set aug[\'apperance\'] to None.'
+
+    # Compose transformations:
+    TF = transforms.Compose(trans)
+
     return TF
 
 def make_geometric_transform(aug, target_widht=1280, target_height = 720):
     '''
-    Params by default:
-    scale=(0.5, 1.0)
-    hflip=0.5
+    Make geometric transformations for data augmentation
     '''
     assert aug is not None
     trans = []
 
     # Select transformations:
     if 'scale' in aug:
-        scale = aug['scale']
+        scale = aug['scale']                               # scale by default = (0.5, 1.0)
         ratio = target_height / float(target_widht)
         trans.append(transforms.RandomResizedCrop((target_height,target_widht),
                                                   scale=scale,
