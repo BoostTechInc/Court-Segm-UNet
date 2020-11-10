@@ -50,9 +50,9 @@ class BasicDataset(Dataset):
 
         # Get transforms:
         if self.aug is not None:
-            if 'apperance' in self.aug:
+            if 'apperance' in self.aug and self.aug['apperance'] is not None:
                 self.TF_apperance = make_apperance_transform(self.aug['apperance'])
-            if 'geometric' in self.aug:
+            if 'geometric' in self.aug and self.aug['geometric'] is not None:
                 self.TF_geometric = make_geometric_transform(self.aug['geometric'],
                                                              target_size[0], target_size[1])
 

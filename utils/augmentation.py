@@ -27,22 +27,33 @@ def make_apperance_transform(aug):
     return TF
 
 def make_geometric_transform(aug, target_widht=1280, target_height = 720):
-    # Params by default:
+    '''
+    Params by default:
     scale=(0.5, 1.0)
     hflip=0.5
+    '''
+    assert aug is not None
+    trans = []
 
-    # Set params from aug:
-    if 'scale' in aug: scale = aug['scale']
-    if 'hflip' in aug: hflip = aug['hflip']
+    # Select transformations:
+    if 'scale' in aug:
+        scale = aug['scale']
+        ratio = target_height / float(target_widht)
+        trans.append(transforms.RandomResizedCrop((target_height,target_widht),
+                                                  scale=scale,
+                                                  ratio=(ratio,ratio),
+                                                  interpolation=Image.NEAREST))
+    if 'hflip' in aug:
+        hflip = aug['hflip']
+        trans.append(transforms.RandomHorizontalFlip(hflip))
 
-    ratio = target_height / float(target_widht)
-    TF = transforms.Compose(
-        [
-            transforms.RandomResizedCrop((target_height,target_widht), scale=scale,
-                                         ratio=(ratio,ratio), interpolation=Image.NEAREST),
-            transforms.RandomHorizontalFlip(hflip)
-        ]
-    )
+    assert len(trans) > 0, \
+    'List of geometric transformations is empty. If you do not want '\
+    'to use any geometric transformations, set aug[\'geometric\'] to None.'
+
+    # Compose transformations:
+    TF = transforms.Compose(trans)
+
     return TF
 
 def apply_transforms(img, mask, TF_apperance=None, TF_geometric=None, geometric_same=True):
