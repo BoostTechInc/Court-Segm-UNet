@@ -165,7 +165,7 @@ def get_args():
                         help='Batch size', dest='batchsize')
     parser.add_argument('-l', '--learning-rate', metavar='LR', type=float, nargs='?', default=0.0001,
                         help='Learning rate', dest='lr')
-    parser.add_argument('-l', '--weight-decay', metavar='WD', type=float, nargs='?', default=1e-8,
+    parser.add_argument('-wd', '--weight-decay', metavar='WD', type=float, nargs='?', default=1e-8,
                         help='Weight decay', dest='weight_decay')
     parser.add_argument('-f', '--load', dest='load', type=str, default=False,
                         help='Load model from a .pth file')
