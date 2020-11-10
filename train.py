@@ -20,7 +20,7 @@ from utils.postprocess import preds_to_masks, mask_to_image
 
 def train_net(net, device, img_dir, mask_dir, val_names,  num_classes, opt='RMSprop',
               aug=None, cp_dir=None, log_dir=None, epochs=5, batch_size=1,
-              lr=0.001, target_size=(1280,720), vizualize=False):
+              lr=0.0001, w_decay=1e-8, target_size=(1280,720), vizualize=False):
     '''
     Train U-Net model
     '''
@@ -44,6 +44,7 @@ def train_net(net, device, img_dir, mask_dir, val_names,  num_classes, opt='RMSp
         Epochs:          {epochs}
         Batch size:      {batch_size}
         Learning rate:   {lr}
+        Weight decay:    {w_decay}
         Training size:   {n_train}
         Validation size: {n_val}
         Images dir:      {img_dir}
@@ -57,11 +58,11 @@ def train_net(net, device, img_dir, mask_dir, val_names,  num_classes, opt='RMSp
     ''')
 
     if opt == 'RMSprop':
-        optimizer = optim.RMSprop(net.parameters(), lr=lr, weight_decay=1e-8, momentum=0.9)
+        optimizer = optim.RMSprop(net.parameters(), lr=lr, weight_decay=w_decay, momentum=0.9)
     elif opt == 'SGD':
-        optimizer = optim.SGD(net.parameters(), lr=lr, weight_decay=1e-8, momentum=0.9)
+        optimizer = optim.SGD(net.parameters(), lr=lr, weight_decay=w_decay, momentum=0.9)
     elif opt == 'Adam':
-        optimizer = optim.Adam(net.parameters(), lr=lr, betas=(0.9, 0.999), weight_decay=1e-8)
+        optimizer = optim.Adam(net.parameters(), lr=lr, betas=(0.9, 0.999), weight_decay=w_decay)
     else:
         print ('optimizer {} does not support yet'.format(opt))
         raise NotImplementedError
@@ -164,6 +165,8 @@ def get_args():
                         help='Batch size', dest='batchsize')
     parser.add_argument('-l', '--learning-rate', metavar='LR', type=float, nargs='?', default=0.0001,
                         help='Learning rate', dest='lr')
+    parser.add_argument('-l', '--weight-decay', metavar='WD', type=float, nargs='?', default=1e-8,
+                        help='Weight decay', dest='weight_decay')
     parser.add_argument('-f', '--load', dest='load', type=str, default=False,
                         help='Load model from a .pth file')
     parser.add_argument('-s', '--size', dest='size', default=(640,360),
@@ -245,6 +248,7 @@ if __name__ == '__main__':
                   epochs=args.epochs,
                   batch_size=args.batchsize,
                   lr=args.lr,
+                  w_decay=args.weight_decay,
                   target_size=args.size,
                   vizualize=args.viz)
     except KeyboardInterrupt:
