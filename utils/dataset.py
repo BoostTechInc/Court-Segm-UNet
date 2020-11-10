@@ -45,11 +45,16 @@ class BasicDataset(Dataset):
         self.target_size = target_size
         self.num_classes = num_classes
         self.aug = aug
+        self.TF_apperance = None
+        self.TF_geometric = None
 
         # Get transforms:
         if self.aug is not None:
-            self.TF_apperance = make_apperance_transform(self.aug)
-            self.TF_geometric = make_geometric_transform(self.aug, target_size[0], target_size[1])
+            if 'apperance' in self.aug:
+                self.TF_apperance = make_apperance_transform(self.aug['apperance'])
+            if 'geometric' in self.aug:
+                self.TF_geometric = make_geometric_transform(self.aug['geometric'],
+                                                             target_size[0], target_size[1])
 
     def __len__(self):
         return len(self.ids)

@@ -45,10 +45,12 @@ def make_geometric_transform(aug, target_widht=1280, target_height = 720):
     )
     return TF
 
-def apply_transforms(img, mask, TF_apperance, TF_geometric, geometric_same=True):
+def apply_transforms(img, mask, TF_apperance=None, TF_geometric=None, geometric_same=True):
     '''
     :geometric_same: If True, then applies the same geometric transform to input mask
     '''
+    assert TF_apperance is not None or TF_geometric is not None
+
     # Convert temporally to specific dtype:
     img_dtype, mask_dtype = img.dtype, mask.dtype
     img = img.to(dtype=torch.float32)
@@ -58,17 +60,20 @@ def apply_transforms(img, mask, TF_apperance, TF_geometric, geometric_same=True)
     seed = np.random.randint(2147483647)
 
     # Transform img:
-    img = TF_apperance(img)
+    if TF_apperance is not None:
+        img = TF_apperance(img)
     if geometric_same:
         torch.manual_seed(seed)
-    img = TF_geometric(img)
+    if TF_geometric is not None:
+        img = TF_geometric(img)
 
     # Transform mask with the same seed:
     if geometric_same:
         torch.manual_seed(seed)
-    if mask.dim() == 2:
-        mask = mask.unsqueeze(0)
-    mask = TF_geometric(mask)
+    if TF_geometric is not None:
+        if mask.dim() == 2:
+            mask = mask.unsqueeze(0)
+        mask = TF_geometric(mask)
 
     # Convert back to the original dtype:
     img = img.to(dtype=img_dtype)
