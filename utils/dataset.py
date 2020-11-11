@@ -46,15 +46,22 @@ class BasicDataset(Dataset):
         self.num_classes = num_classes
         self.aug = aug
         self.TF_apperance = None
-        self.TF_geometric = None
+        self.TF_img_geometric = None
+        self.TF_msk_geometric = None
 
         # Get transforms:
         if self.aug is not None:
             if 'apperance' in self.aug and self.aug['apperance'] is not None:
                 self.TF_apperance = make_apperance_transform(self.aug['apperance'])
             if 'geometric' in self.aug and self.aug['geometric'] is not None:
-                self.TF_geometric = make_geometric_transform(self.aug['geometric'],
-                                                             target_size[0], target_size[1])
+                self.TF_img_geometric = make_geometric_transform(self.aug['geometric'],
+                                                                 target_size[0],
+                                                                 target_size[1],
+                                                                 Image.BILINEAR)
+                self.TF_msk_geometric = make_geometric_transform(self.aug['geometric'],
+                                                                 target_size[0],
+                                                                 target_size[1],
+                                                                 Image.NEAREST)
 
     def __len__(self):
         return len(self.ids)
@@ -106,7 +113,10 @@ class BasicDataset(Dataset):
 
         # Augmentation:
         if self.aug is not None:
-            img, mask = apply_transforms(img, mask, self.TF_apperance, self.TF_geometric)
+            img, mask = apply_transforms(img, mask,
+                                         self.TF_apperance,
+                                         self.TF_img_geometric,
+                                         self.TF_msk_geometric)
 
         if mask.ndim == 3:
             mask = mask.squeeze(0)        # [1,h,w] -> [h,w]

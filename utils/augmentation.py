@@ -40,7 +40,7 @@ def make_apperance_transform(aug):
 
     return TF
 
-def make_geometric_transform(aug, target_widht=1280, target_height = 720):
+def make_geometric_transform(aug, target_widht=1280, target_height=720, interpol=Image.BILINEAR):
     '''
     Make geometric transformations for data augmentation
     '''
@@ -50,11 +50,11 @@ def make_geometric_transform(aug, target_widht=1280, target_height = 720):
     # Select transformations:
     if 'scale' in aug:
         scale = aug['scale']                               # scale by default = (0.5, 1.0)
-        ratio = target_height / float(target_widht)
+        ratio = target_widht / float(target_height)
         trans.append(transforms.RandomResizedCrop((target_height,target_widht),
                                                   scale=scale,
                                                   ratio=(ratio,ratio),
-                                                  interpolation=Image.NEAREST))
+                                                  interpolation=interpol))     # Image.NEAREST
     if 'hflip' in aug:
         hflip = aug['hflip']
         trans.append(transforms.RandomHorizontalFlip(hflip))
@@ -68,11 +68,18 @@ def make_geometric_transform(aug, target_widht=1280, target_height = 720):
 
     return TF
 
-def apply_transforms(img, mask, TF_apperance=None, TF_geometric=None, geometric_same=True):
+def apply_transforms(img, mask,
+                     TF_apperance=None,
+                     TF_img_geometric=None,
+                     TF_msk_geometric=None,
+                     geometric_same=True):
     '''
     :geometric_same: If True, then applies the same geometric transform to input mask
     '''
-    assert TF_apperance is not None or TF_geometric is not None
+    assert TF_apperance is not None or \
+          (TF_img_geometric is not None and TF_msk_geometric is not None)
+    assert (TF_img_geometric is None and TF_msk_geometric is None) or \
+           (TF_img_geometric is not None and TF_msk_geometric is not None)
 
     # Convert temporally to specific dtype:
     img_dtype, mask_dtype = img.dtype, mask.dtype
@@ -87,16 +94,16 @@ def apply_transforms(img, mask, TF_apperance=None, TF_geometric=None, geometric_
         img = TF_apperance(img)
     if geometric_same:
         torch.manual_seed(seed)
-    if TF_geometric is not None:
-        img = TF_geometric(img)
+    if TF_img_geometric is not None:
+        img = TF_img_geometric(img)
 
     # Transform mask with the same seed:
     if geometric_same:
         torch.manual_seed(seed)
-    if TF_geometric is not None:
+    if TF_msk_geometric is not None:
         if mask.dim() == 2:
             mask = mask.unsqueeze(0)
-        mask = TF_geometric(mask)
+        mask = TF_msk_geometric(mask)
 
     # Convert back to the original dtype:
     img = img.to(dtype=img_dtype)
@@ -111,18 +118,22 @@ if __name__ == '__main__':
     '''
     from torch.utils.data import DataLoader
     from dataset import BasicDataset, split_on_train_val, worker_init_fn
+    from conf_parser import parse_conf
 
     # Paths:
     img_dir = '/media/darkalert/c02b53af-522d-40c5-b824-80dfb9a11dbb/boost/datasets/court_segmentation/NCAAM_2/f_t/'
     mask_dir = '/media/darkalert/c02b53af-522d-40c5-b824-80dfb9a11dbb/boost/datasets/court_segmentation/NCAAM_2/m_t/'
     idxs = ['1']
-    dst_dir = '/media/darkalert/c02b53af-522d-40c5-b824-80dfb9a11dbb/boost/datasets/court_segmentation/NCAAM/_test/aug/'
+    conf_path = '/home/darkalert/builds/Court-Segm-UNet/conf/train_unet.yaml'
+    dst_dir = '/media/darkalert/c02b53af-522d-40c5-b824-80dfb9a11dbb/boost/datasets/court_segmentation/NCAAM_2/TEST/'
     if not os.path.exists(dst_dir):
         os.makedirs(dst_dir)
 
     # Prepare data:
+    conf = parse_conf(conf_path)
+    aug = conf['aug']
     _, ids = split_on_train_val(img_dir, idxs)
-    data = BasicDataset(ids, img_dir, mask_dir, 4, (1280,720), aug=True)
+    data = BasicDataset(ids, img_dir, mask_dir, 4, (1280,720), aug=aug)
     loader = DataLoader(data, batch_size=1, shuffle=False, num_workers=8,
                         pin_memory=True, worker_init_fn=worker_init_fn)
 

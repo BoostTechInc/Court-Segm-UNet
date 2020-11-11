@@ -24,7 +24,7 @@ def train_net(net, device, img_dir, mask_dir, val_names,  num_classes, opt='RMSp
     '''
     Train U-Net model
     '''
-    # Prepare dataset:
+    # Prepare dataset:nvidi
     train_ids, val_ids = split_on_train_val(img_dir, val_names)
     train = BasicDataset(train_ids, img_dir, mask_dir, num_classes, target_size, aug=aug)
     val = BasicDataset(val_ids, img_dir, mask_dir, num_classes, target_size)
@@ -88,6 +88,20 @@ def train_net(net, device, img_dir, mask_dir, val_names,  num_classes, opt='RMSp
 
                 imgs = imgs.to(device=device, dtype=torch.float32)
                 true_masks = true_masks.to(device=device)
+
+                # #######
+                # from torchvision import transforms
+                # for j, (img, mask) in enumerate(zip(imgs,true_masks)):
+                #     img = transforms.ToPILImage(mode='RGB')(img)
+                #     mask = transforms.ToPILImage(mode='L')(mask.to(dtype=torch.uint8))
+                #
+                #     # Save:
+                #     dst_dir = '/media/darkalert/c02b53af-522d-40c5-b824-80dfb9a11dbb/boost/datasets/court_segmentation/NCAAM_2/TEST/'
+                #     dst_path = os.path.join(dst_dir, '{}-{}.jpeg'.format(global_step,j))
+                #     img.save(dst_path, 'JPEG')
+                #     dst_path = os.path.join(dst_dir, '{}-{}_mask.png'.format(global_step,j))
+                #     mask.save(dst_path, 'PNG')
+                # #######
 
                 masks_pred = net(imgs)
                 loss = criterion(masks_pred, true_masks)
