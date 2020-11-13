@@ -77,14 +77,17 @@ class UNetSTN(nn.Module):
         theta = self.reg(xl)
         theta = theta.view(-1, 2, 3)
 
+        n = x.shape[0]
+        t = template[0:n]
+
         try:
-            grid = F.affine_grid(theta, template.size())
+            grid = F.affine_grid(theta, t.size())
         except:
             print ('theta',theta.shape)
-            print ('template', template.shape)
+            print ('t', t.shape)
             print ('xl', xl.shape)
             print('x', x.shape)
-        proj = F.grid_sample(template, grid)
+        proj = F.grid_sample(t, grid)
 
         return proj.squeeze(1)
 
