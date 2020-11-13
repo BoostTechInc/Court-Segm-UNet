@@ -21,7 +21,7 @@ from utils.postprocess import preds_to_masks, mask_to_image
 
 def train_net(net, device, img_dir, mask_dir, val_names,  num_classes, opt='RMSprop',
               aug=None, cp_dir=None, log_dir=None, epochs=5, batch_size=1,
-              lr=0.0001, w_decay=1e-8, target_size=(1280,720), vizualize=False):
+              lr=0.0001, w_decay=1e-8, l2_lymbda=10.0, target_size=(1280,720), vizualize=False):
     '''
     Train U-Net model
     '''
@@ -46,6 +46,7 @@ def train_net(net, device, img_dir, mask_dir, val_names,  num_classes, opt='RMSp
         Batch size:      {batch_size}
         Learning rate:   {lr}
         Weight decay:    {w_decay}
+        L2 lambda:       {l2_lymbda}
         Training size:   {n_train}
         Validation size: {n_val}
         Images dir:      {img_dir}
@@ -124,8 +125,7 @@ def train_net(net, device, img_dir, mask_dir, val_names,  num_classes, opt='RMSp
                 # Calculate reconstruction L2-loss for STN:
                 gt_masks = true_masks.to(dtype=torch.float32) / float(num_classes)
                 projected_masks = projected_masks.squeeze(1)
-                lymbda = 10.0
-                l2_loss = l2_criterion(projected_masks, gt_masks) * lymbda
+                l2_loss = l2_criterion(projected_masks, gt_masks) * l2_lymbda
 
                 # Total loss:
                 loss = ce_loss + l2_loss
@@ -207,6 +207,8 @@ def get_args():
                         help='Learning rate', dest='lr')
     parser.add_argument('-wd', '--weight-decay', metavar='WD', type=float, nargs='?', default=1e-8,
                         help='Weight decay', dest='weight_decay')
+    parser.add_argument('-l2l', '--l2_lymbda', type=float, default=10.0,
+                        help='Lambda for L2 loss', dest='l2_lymbda')
     parser.add_argument('-f', '--load', dest='load', type=str, default=False,
                         help='Load model from a .pth file')
     parser.add_argument('-s', '--size', dest='size', default=(640,360),
@@ -301,6 +303,7 @@ if __name__ == '__main__':
                   batch_size=args.batchsize,
                   lr=args.lr,
                   w_decay=args.weight_decay,
+                  l2_lymbda=args.l2_lymbda,
                   target_size=args.size,
                   vizualize=args.viz)
     except KeyboardInterrupt:
