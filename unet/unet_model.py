@@ -80,7 +80,7 @@ class UNetSTN(nn.Module):
         grid = F.affine_grid(theta, template.size())
         proj = F.grid_sample(template, grid)
 
-        return proj
+        return proj.squeeze(1)
 
     def forward(self, x):
         # UNet:

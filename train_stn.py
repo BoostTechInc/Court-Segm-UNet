@@ -13,7 +13,7 @@ from torch.utils.tensorboard import SummaryWriter
 from utils.dataset import BasicDataset, split_on_train_val, worker_init_fn, load_template
 from torch.utils.data import DataLoader
 
-from eval import eval_net
+from eval import eval_stn
 from unet import UNetSTN
 from utils.conf_parser import parse_conf
 from utils.postprocess import preds_to_masks, mask_to_image
@@ -92,21 +92,6 @@ def train_net(net, device, img_dir, mask_dir, val_names,  num_classes, opt='RMSp
                 imgs = imgs.to(device=device, dtype=torch.float32)
                 true_masks = true_masks.to(device=device)
 
-                # #######
-                # from torchvision import transforms
-                # for j, (img, mask) in enumerate(zip(imgs,true_masks)):
-                #     img = transforms.ToPILImage(mode='RGB')(img)
-                #     mask = transforms.ToPILImage(mode='L')(mask.to(dtype=torch.uint8))
-                #
-                #     # Save:
-                #     dst_dir = '/media/darkalert/c02b53af-522d-40c5-b824-80dfb9a11dbb/boost/datasets/court_segmentation/NCAAM_2/TEST/'
-                #     dst_path = os.path.join(dst_dir, '{}-{}.jpeg'.format(global_step,j))
-                #     img.save(dst_path, 'JPEG')
-                #     dst_path = os.path.join(dst_dir, '{}-{}_mask.png'.format(global_step,j))
-                #     mask.save(dst_path, 'PNG')
-                # #######
-
-
                 masks_pred, projected_masks = net(imgs)
                 # #######
                 # from torchvision import transforms
@@ -124,7 +109,6 @@ def train_net(net, device, img_dir, mask_dir, val_names,  num_classes, opt='RMSp
 
                 # Calculate reconstruction L2-loss for STN:
                 gt_masks = true_masks.to(dtype=torch.float32) / float(num_classes)
-                projected_masks = projected_masks.squeeze(1)
                 l2_loss = l2_criterion(projected_masks, gt_masks) * l2_lymbda
 
                 # Total loss:
@@ -143,6 +127,7 @@ def train_net(net, device, img_dir, mask_dir, val_names,  num_classes, opt='RMSp
 
                 pbar.update(imgs.shape[0])
                 global_step += 1
+
                 if global_step % (n_train // (5 * batch_size)) == 0:
                     for tag, value in net.named_parameters():
                         tag = tag.replace('.', '/')
@@ -150,7 +135,7 @@ def train_net(net, device, img_dir, mask_dir, val_names,  num_classes, opt='RMSp
                         writer.add_histogram('grads/' + tag, value.grad.data.cpu().numpy(), global_step)
 
                     # Validation:
-                    result = eval_net(net, val_loader, device, verbose=vizualize)
+                    result = eval_stn(net, val_loader, device, verbose=vizualize)
                     val_score = result['val_score']
                     scheduler.step(val_score)
 
@@ -170,9 +155,17 @@ def train_net(net, device, img_dir, mask_dir, val_names,  num_classes, opt='RMSp
                         pred_masks = pred_masks.astype(np.float32) / 255.0
                         pred_masks = pred_masks[...,::-1]
 
+                        projs = result['projs'] * num_classes
+                        projs = projs.type(torch.IntTensor).cpu().numpy().astype(np.uint8)
+                        projs = mask_to_image(projs)
+                        projs = np.transpose(projs, (0, 3, 1, 2))
+                        projs = projs.astype(np.float32) / 255.0
+                        projs = projs[..., ::-1]
+
                         # Save the results for tensorboard vizualization:
                         writer.add_images('imgs', result['imgs'], global_step)
                         writer.add_images('preds', pred_masks, global_step)
+                        writer.add_images('projs', projs, global_step)
 
         if cp_dir is not None:
             try:
