@@ -36,6 +36,21 @@ def split_on_train_val(img_dir, val_names):
     logging.info(f'Data has been splitted. Train ids: {len(train_ids)}, val ids: {len(val_ids)}')
     return train_ids, val_ids
 
+def load_template(path, num_classes, target_size, batch_size):
+    '''
+    Load the court template that will be projected by affine matrix from STN
+    '''
+    template = Image.open(path)
+    template = template.resize(target_size, resample=Image.NEAREST)
+    template = np.array(template) / float(num_classes)
+    template_tensor = torch.from_numpy(template).type(torch.FloatTensor)
+
+    while template_tensor.ndim < 4:
+        template_tensor = template_tensor.unsqueeze(0)
+    template_tensor = template_tensor.repeat(batch_size, 1, 1, 1)
+
+    return template_tensor
+
 
 class BasicDataset(Dataset):
     def __init__(self, ids, img_dir, mask_dir, num_classes=1, target_size=(1280,720), aug=None):

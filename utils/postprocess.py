@@ -4,7 +4,7 @@ import torch.nn.functional as F
 
 
 
-def preds_to_masks(preds, n_classes=1):
+def preds_to_masks(preds, n_classes=1, to_ndaray=True):
     # Predictions to labels:
     if n_classes > 1:
         probs = F.softmax(preds, dim=1)
@@ -12,7 +12,8 @@ def preds_to_masks(preds, n_classes=1):
     else:
         masks = torch.sigmoid(preds)
 
-    masks = masks.type(torch.IntTensor).cpu().numpy().astype(np.uint8)
+    if to_ndaray:
+        masks = masks.type(torch.IntTensor).cpu().numpy().astype(np.uint8)
 
     return masks
 

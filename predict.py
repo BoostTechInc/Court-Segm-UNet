@@ -5,6 +5,7 @@ import os
 import torch
 from PIL import Image
 import cv2
+import numpy as np
 from tqdm import tqdm
 
 from unet import UNet
@@ -112,15 +113,15 @@ def test(net, input_paths, output_paths, input_size):
 
 if __name__ == "__main__":
     args = get_args()
-    args.model = '/home/darkalert/builds/Court-Segm-UNet/checkpoints/t_640x360_bilinear/checkpointsCP_last.pth'
+    args.model = '/home/darkalert/builds/Court-Segm-UNet/checkpoints/NCAAM80k_640x360_aug_deconv/last.pth'
     args.src_dir = '/media/darkalert/c02b53af-522d-40c5-b824-80dfb9a11dbb/boost/datasets/court_segmentation/NCAAM/frames_test/'
-    args.dst_dir = '/media/darkalert/c02b53af-522d-40c5-b824-80dfb9a11dbb/boost/datasets/court_segmentation/NCAAM/_test/preds/t_640x360_bilinear/'
-    args.bilinear = True
-    args.n_classes = 5
+    args.dst_dir = '/media/darkalert/c02b53af-522d-40c5-b824-80dfb9a11dbb/boost/datasets/court_segmentation/NCAAM/_test/preds/NCAAM80k_640x360_aug_deconv/'
+    args.bilinear = False
+    args.n_classes = 4
 
     # Get videos:
     video_names = [n for n in os.listdir(args.src_dir) if os.path.isdir(os.path.join(args.src_dir, n))]
-    video_names = ['train_JadenMcDaniels_0_Isolation_IncludingPasses_Offense_2019-2020_NCAAM']
+    # video_names = ['train_JadenMcDaniels_0_Isolation_IncludingPasses_Offense_2019-2020_NCAAM']
 
     # Load model:
     net = UNet(n_channels=3, n_classes=args.n_classes, bilinear=args.bilinear)
