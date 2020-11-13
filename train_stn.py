@@ -162,10 +162,11 @@ def train_net(net, device, img_dir, mask_dir, val_names,  num_classes, opt='RMSp
                         projs = projs.astype(np.float32) / 255.0
                         projs = projs[..., ::-1]
 
+                        # Concatenate all images:
+                        output = np.concatenate((result['imgs'], pred_masks, projs), axis=2)
+
                         # Save the results for tensorboard vizualization:
-                        writer.add_images('imgs', result['imgs'], global_step)
-                        writer.add_images('preds', pred_masks, global_step)
-                        writer.add_images('projs', projs, global_step)
+                        writer.add_images('output', output, global_step)
 
         if cp_dir is not None:
             try:
