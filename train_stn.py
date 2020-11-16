@@ -14,7 +14,7 @@ from utils.dataset import BasicDataset, split_on_train_val, worker_init_fn, load
 from torch.utils.data import DataLoader
 
 from eval import eval_stn
-from unet import UNetSTN
+from unet import CourtReconstruction
 from utils.conf_parser import parse_conf
 from utils.postprocess import preds_to_masks, mask_to_image
 
@@ -254,11 +254,12 @@ if __name__ == '__main__':
     template = template.to(device=device)
 
     # Init UNet:
-    net = UNetSTN(n_channels=args.n_channels,
-                  n_classes=args.n_classes,
-                  template=template,
-                  bilinear=args.bilinear)
-    logging.info(f'Network UNET + STN:\n'
+    net = CourtReconstruction(n_channels=args.n_channels,
+                              n_classes=args.n_classes,
+                              template=template,
+                              target_size=args.size,
+                              bilinear=args.bilinear)
+    logging.info(f'Network CourtReconstruction:\n'
                  f'\t{net.n_channels} input channels\n'
                  f'\t{net.n_classes} output channels (classes)\n'
                  f'\t{"Bilinear" if net.bilinear else "Transposed conv"} upscaling')
