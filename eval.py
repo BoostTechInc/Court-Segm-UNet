@@ -40,13 +40,13 @@ def eval_net(net, loader, device, verbose=False):
 
 def eval_stn(net, loader, device, verbose=False):
     """Evaluation UNET+STN"""
-    net.eval()
-    mask_type = torch.float32 if net.n_classes == 1 else torch.long
-    n_val = len(loader)                      # the number of batch
+    print('\nStarting validation...\n')
     ce_score, mse_score = 0, 0
     imgs, mask_pred, projected_masks = None, None, None
+    mask_type = torch.long
+    n_val = len(loader)
 
-    print ('\nStarting validation...\n')
+    net.eval()
 
     for batch in loader:
         imgs, true_masks = batch['image'], batch['mask']
