@@ -136,16 +136,17 @@ def train_net(net, device, img_dir, mask_dir, val_names,  num_classes, opt='RMSp
 
                     # Validation:
                     result = eval_stn(net, val_loader, device, verbose=vizualize)
-                    val_score = result['val_score']
-                    scheduler.step(val_score)
+                    val_tot_score = result['val_tot_score']
+                    val_ce_score = result['val_ce_score']
+                    val_mse_score = result['val_mse_score']
+                    scheduler.step(val_tot_score)
 
                     writer.add_scalar('learning_rate', optimizer.param_groups[0]['lr'], global_step)
-                    if net.n_classes > 1:
-                        logging.info('Validation cross entropy: {}'.format(val_score))
-                        writer.add_scalar('Loss/test', val_score, global_step)
-                    else:
-                        logging.info('Validation Dice Coeff: {}'.format(val_score))
-                        writer.add_scalar('Dice/test', val_score, global_step)
+                    writer.add_scalar('Loss/test', val_tot_score, global_step)
+                    writer.add_scalar('Loss/test_mse', val_mse_score, global_step)
+                    writer.add_scalar('Loss/test_ce', val_ce_score, global_step)
+                    logging.info('Validation total: {}, CE: {}, MSE: {}'.
+                                 format(val_tot_score, val_ce_score, val_mse_score))
 
                     if vizualize:
                         # Postprocess predicted mask for tensorboard vizualization:

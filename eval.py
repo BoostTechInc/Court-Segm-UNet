@@ -39,11 +39,11 @@ def eval_net(net, loader, device, verbose=False):
 
 
 def eval_stn(net, loader, device, verbose=False):
-    """Evaluation without the densecrf with the dice coefficient"""
+    """Evaluation UNET+STN"""
     net.eval()
     mask_type = torch.float32 if net.n_classes == 1 else torch.long
-    n_val = len(loader)  # the number of batch
-    tot = 0
+    n_val = len(loader)                      # the number of batch
+    ce_score, mse_score = 0, 0
     imgs, mask_pred, projected_masks = None, None, None
 
     print ('\nStarting validation...\n')
@@ -56,16 +56,16 @@ def eval_stn(net, loader, device, verbose=False):
         with torch.no_grad():
             mask_pred, projected_masks = net(imgs)
 
-        if net.n_classes > 1:
-            tot += F.cross_entropy(mask_pred, true_masks).item()
-        else:
-            pred = torch.sigmoid(mask_pred)
-            pred = (pred > 0.5).float()
-            tot += dice_coeff(pred, true_masks).item()
+        # Scores:
+        ce_score += F.cross_entropy(mask_pred, true_masks).item()
+        gt_masks = true_masks.to(dtype=torch.float32) / float(net.n_classes)
+        mse_score += F.mse_loss(projected_masks, gt_masks).item()
 
     net.train()
 
-    result = {'val_score': tot/n_val}
+    result = {'val_tot_score': (ce_score+mse_score)/n_val,
+              'val_ce_score': ce_score/n_val,
+              'val_mse_score': mse_score/n_val}
     if verbose:
         result['imgs'] = imgs.cpu()
         result['preds'] = mask_pred.cpu()
