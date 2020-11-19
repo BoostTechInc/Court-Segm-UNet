@@ -5,6 +5,7 @@ import sys
 from tqdm import tqdm
 import signal
 
+import cv2
 import numpy as np
 import torch
 import torch.nn as nn
@@ -93,16 +94,6 @@ def train_net(net, device, img_dir, mask_dir, val_names,  num_classes, opt='RMSp
                 true_masks = true_masks.to(device=device)
 
                 masks_pred, projected_masks = net(imgs)
-                # #######
-                # from torchvision import transforms
-                # ttt = true_masks.type(torch.FloatTensor)/float(num_classes)
-                # for j, proj in enumerate(ttt):
-                #     proj = proj*255
-                #     proj = transforms.ToPILImage(mode='L')(proj.to(dtype=torch.uint8))
-                #     dst_dir = '/media/darkalert/c02b53af-522d-40c5-b824-80dfb9a11dbb/boost/datasets/court_segmentation/NCAAM/_test/projects/'
-                #     dst_path = os.path.join(dst_dir, '{}-{}.png'.format(global_step,j))
-                #     proj.save(dst_path, 'PNG')
-                # #######
 
                 # Caluclate CrossEntropy loss:
                 ce_loss = criterion(masks_pred, true_masks)
