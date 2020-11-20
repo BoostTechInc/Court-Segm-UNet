@@ -257,7 +257,7 @@ class ResNetReg(nn.Module):
         return self._forward_impl(x)
 
 
-def make_resnet(block: Type[Union[BasicBlock, Bottleneck]],
+def _make_resnet(block: Type[Union[BasicBlock, Bottleneck]],
             layers: List[int],
             pretrained_path: str = None,
             **kwargs: Any) -> ResNetReg:
@@ -272,61 +272,61 @@ def make_resnet(block: Type[Union[BasicBlock, Bottleneck]],
 def resnetreg18(pretrained_path: str = None) -> ResNetReg:
     r"""ResNetReg-18 model
     """
-    resnet = make_resnet(BasicBlock, [2, 2, 2, 2], pretrained_path)
+    resnet = _make_resnet(BasicBlock, [2, 2, 2, 2], pretrained_path)
 
     return resnet
 
 def resnetreg34(pretrained_path: str = None) -> ResNetReg:
     r"""ResNetReg-34 model
     """
-    resnet = make_resnet(BasicBlock, [3, 4, 6, 3], pretrained_path)
+    resnet = _make_resnet(BasicBlock, [3, 4, 6, 3], pretrained_path)
 
     return resnet
 
 def resnetreg50(pretrained_path: str = None) -> ResNetReg:
     r"""ResNetReg-50 model
     """
-    resnet = make_resnet(Bottleneck, [3, 4, 6, 3], pretrained_path)
+    resnet = _make_resnet(Bottleneck, [3, 4, 6, 3], pretrained_path)
 
     return resnet
 
 def resnetreg101(pretrained_path: str = None) -> ResNetReg:
     r"""ResNetReg-101 model
     """
-    resnet = make_resnet(Bottleneck, [3, 4, 23, 3], pretrained_path)
+    resnet = _make_resnet(Bottleneck, [3, 4, 23, 3], pretrained_path)
 
     return resnet
 
-def resnet152(pretrained_path: str = None) -> ResNetReg:
+def resnetreg152(pretrained_path: str = None) -> ResNetReg:
     r"""ResNetReg-152 model
     """
-    resnet = make_resnet(Bottleneck, [3, 8, 36, 3], pretrained_path)
+    resnet = _make_resnet(Bottleneck, [3, 8, 36, 3], pretrained_path)
 
     return resnet
 
-def resnext50_32x4d(pretrained_path: str = None) -> ResNetReg:
+def resnextreg50_32x4d(pretrained_path: str = None) -> ResNetReg:
     r"""ResNeXtReg-50 32x4d
     Aggregated Residual Transformation for Deep Neural Networks
     """
     kwargs = {}
     kwargs['groups'] = 32
     kwargs['width_per_group'] = 4
-    resnet = make_resnet(Bottleneck, [3, 4, 6, 3], pretrained_path, **kwargs)
+    resnet = _make_resnet(Bottleneck, [3, 4, 6, 3], pretrained_path, **kwargs)
 
     return resnet
 
-def resnext101_32x8d(pretrained_path: str = None) -> ResNetReg:
+def resnextreg101_32x8d(pretrained_path: str = None) -> ResNetReg:
     r"""ResNeXt-101 32x8d
     Aggregated Residual Transformation for Deep Neural Networks
     """
     kwargs = {}
     kwargs['groups'] = 32
     kwargs['width_per_group'] = 8
-    resnet = make_resnet(Bottleneck, [3, 4, 23, 3], pretrained_path, **kwargs)
+    resnet = _make_resnet(Bottleneck, [3, 4, 23, 3], pretrained_path, **kwargs)
 
     return resnet
 
-def wide_resnet50_2(pretrained_path: str = None) -> ResNetReg:
+def wide_resnetreg50_2(pretrained_path: str = None) -> ResNetReg:
     r"""Wide ResNetReg-50-2 model
     Aggregated Residual Transformation for Deep Neural Networks
 
@@ -337,12 +337,12 @@ def wide_resnet50_2(pretrained_path: str = None) -> ResNetReg:
     """
     kwargs = {}
     kwargs['width_per_group'] = 64 * 2
-    resnet = make_resnet(Bottleneck, [3, 4, 6, 3], pretrained_path, **kwargs)
+    resnet = _make_resnet(Bottleneck, [3, 4, 6, 3], pretrained_path, **kwargs)
 
     return resnet
 
 
-def wide_resnet101_2(pretrained_path: str = None) -> ResNetReg:
+def wide_resnetreg101_2(pretrained_path: str = None) -> ResNetReg:
     r"""Wide ResNetReg-101-2 model
     Aggregated Residual Transformation for Deep Neural Networks
 
@@ -353,6 +353,21 @@ def wide_resnet101_2(pretrained_path: str = None) -> ResNetReg:
     """
     kwargs = {}
     kwargs['width_per_group'] = 64 * 2
-    resnet = make_resnet(Bottleneck, [3, 4, 23, 3], pretrained_path, **kwargs)
+    resnet = _make_resnet(Bottleneck, [3, 4, 23, 3], pretrained_path, **kwargs)
 
     return resnet
+
+resnet_models = {
+    'resnetreg18': resnetreg18,
+    'resnetreg34': resnetreg34,
+    'resnetreg50': resnetreg50,
+    'resnetreg101': resnetreg101,
+    'resnetreg152': resnetreg152,
+    'resnextreg50_32x4d': resnextreg50_32x4d,
+    'resnextreg101_32x8d': resnextreg101_32x8d,
+    'wide_resnetreg50_2': wide_resnetreg50_2,
+    'wide_resnetreg101_2': wide_resnetreg101_2,
+}
+
+def resnet(name: str, pretrained_path: str = None) -> ResNetReg:
+    return resnet_models[name](pretrained_path)

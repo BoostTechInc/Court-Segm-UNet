@@ -72,3 +72,38 @@ def eval_stn(net, loader, device, verbose=False):
         result['projs'] = projected_masks.cpu()
 
     return result
+
+
+def eval_reconstructor(net, loader, device, verbose=False):
+    """Evaluation UNet+ResNetReg"""
+    print('\nStarting validation...\n')
+    ce_score, rec_score = 0, 0
+    imgs, logits, rec_masks = None, None, None
+    mask_type = torch.long
+    n_val = len(loader)
+
+    net.eval()
+
+    for batch in loader:
+        imgs, gt = batch['image'], batch['mask']
+        imgs = imgs.to(device=device, dtype=torch.float32)
+        gt = gt.to(device=device, dtype=mask_type)
+        gt_masks = gt.to(dtype=torch.float32) / float(net.n_classes)
+
+        with torch.no_grad():
+            logits, rec_masks = net(imgs)
+
+        # Scores:
+        ce_score += F.cross_entropy(logits, gt).item()
+        rec_score += F.mse_loss(rec_masks, gt_masks).item()
+
+    net.train()
+
+    result = {'val_ce_score': ce_score/n_val,
+              'val_rec_score': rec_score/n_val}
+    if verbose:
+        result['imgs'] = imgs.cpu()
+        result['logits'] = logits.cpu()
+        result['rec_masks'] = rec_masks.cpu()
+
+    return result
