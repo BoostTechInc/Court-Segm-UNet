@@ -161,7 +161,7 @@ def train_net(net, device, img_dir, mask_dir, val_names,  num_classes,
                     writer.add_scalar('Loss/test', val_tot_score, global_step)
                     writer.add_scalar('Loss/test_CE', val_ce_score, global_step)
                     writer.add_scalar('Loss/test_rec', val_rec_score, global_step)
-                    logging.info('Validation tot: {}, CE: {}, rec: {}'.
+                    logging.info('\nValidation tot: {}, CE: {}, rec: {}'.
                                  format(val_tot_score, val_ce_score, val_rec_score))
 
                     if vizualize:

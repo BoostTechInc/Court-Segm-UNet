@@ -19,7 +19,8 @@ class Reconstructor(nn.Module):
                  target_size,
                  bilinear=True,
                  resnet_name='resnetreg50',
-                 resnet_pretrained=None):
+                 resnet_pretrained=None,
+                 warp_by_nearest=False):
         super(Reconstructor, self).__init__()
         self.n_channels = n_channels
         self.n_classes = n_classes
@@ -51,7 +52,11 @@ class Reconstructor(nn.Module):
 
         # STN warper:
         h, w = target_size[1], target_size[0]
-        self.warper = kornia.HomographyWarper(h, w)                # mode='nearest' seems has a bug
+        if warp_by_nearest is False:
+            self.warper = kornia.HomographyWarper(h, w)
+        else:
+            # It seems mode='nearest' has a bug when used during training
+            self.warper = kornia.HomographyWarper(h, w, mode='nearest')
 
     @staticmethod
     def make_regressor(channels):
@@ -112,3 +117,17 @@ class Reconstructor(nn.Module):
         rec_mask = self.warp(theta, self.template)
 
         return logits, rec_mask
+
+    def predict(self, x, warp=False):
+        '''Predicts the transformation matrix (theta) from input image (x).
+        If warp is True then it also warps the template using the predicted theta'''
+        logits, x_top = self.forward_unet(x)
+        theta = self.resnet_reg(logits)
+
+        if warp:
+            mask = self.warp(theta, self.template)
+        else:
+            mask = None
+
+        return theta, mask
+
