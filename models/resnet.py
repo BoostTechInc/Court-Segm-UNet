@@ -260,8 +260,9 @@ class ResNetReg(nn.Module):
 def _make_resnet(block: Type[Union[BasicBlock, Bottleneck]],
             layers: List[int],
             pretrained_path: str = None,
+            in_channels: int = 4,
             **kwargs: Any) -> ResNetReg:
-    model = ResNetReg(block, layers, **kwargs)
+    model = ResNetReg(block, layers, in_channels=in_channels, **kwargs)
 
     if pretrained_path is not None:
         model.load_state_dict(torch.load(pretrained_path), strict=False)
@@ -269,10 +270,10 @@ def _make_resnet(block: Type[Union[BasicBlock, Bottleneck]],
     return model
 
 
-def resnetreg18(pretrained_path: str = None) -> ResNetReg:
+def resnetreg18(pretrained_path: str = None, in_channels: int = 4) -> ResNetReg:
     r"""ResNetReg-18 model
     """
-    resnet = _make_resnet(BasicBlock, [2, 2, 2, 2], pretrained_path)
+    resnet = _make_resnet(BasicBlock, [2, 2, 2, 2], pretrained_path, in_channels)
 
     return resnet
 
@@ -369,5 +370,5 @@ resnet_models = {
     'wide_resnetreg101_2': wide_resnetreg101_2,
 }
 
-def resnet(name: str, pretrained_path: str = None) -> ResNetReg:
-    return resnet_models[name](pretrained_path)
+def resnet(name: str, pretrained_path: str = None, in_channels: int = 4) -> ResNetReg:
+    return resnet_models[name](pretrained_path, in_channels)

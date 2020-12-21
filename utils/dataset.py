@@ -26,7 +26,7 @@ def split_on_train_val(img_dir, val_names):
 
     for name in names:
         subdir = os.path.join(img_dir, name)
-        ids = [os.path.join(name,file.split('.')[0])
+        ids = [os.path.join(name,file.split('.jpeg')[0])
                for file in listdir(subdir) if not file.endswith('.')]
         if any(name == n for n in val_names):
             val_ids += ids
@@ -111,8 +111,8 @@ class BasicDataset(Dataset):
         idx = self.ids[i]
 
         # Get image and mask paths:
-        mask_file = glob(self.mask_dir + idx + '.*')
-        img_file = glob(self.img_dir + idx + '.*')
+        mask_file = glob(self.mask_dir + idx + '.png')
+        img_file = glob(self.img_dir + idx + '.jpeg')
         assert len(mask_file) == 1, \
             'Either no mask or multiple masks found for the ID {}: {}'.format(idx, mask_file)
         assert len(img_file) == 1, \

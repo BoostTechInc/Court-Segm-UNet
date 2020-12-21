@@ -45,7 +45,7 @@ class Reconstructor(nn.Module):
         #self.unet_reg = Reconstructor.make_regressor(reg_channels)
 
         # ResNet regressor that outputs the second 3x3 transformation matrix:
-        self.resnet_reg = resnet(resnet_name, resnet_pretrained)
+        self.resnet_reg = resnet(resnet_name, resnet_pretrained, n_classes)
 
         # Court template that will be warped by the learnt transformation matrix:
         self.template = template
