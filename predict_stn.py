@@ -10,7 +10,7 @@ from tqdm import tqdm
 
 from unet import UNet, CourtReconstruction
 from utils.dataset import BasicDataset, load_template
-from utils.postprocess import preds_to_masks, mask_to_image
+from utils.postprocess import preds_to_masks, onehot_to_image
 
 
 def predict_img(net, full_img, device, input_size):
@@ -75,11 +75,11 @@ def test(net, input_paths, out_mask_paths, out_proj_paths, in_size, out_size):
             mask, proj = predict_img(net=net, full_img=img, input_size=in_size, device=device)
 
             # Postprocessing:
-            rgb_mask = mask_to_image(mask)[0]
+            rgb_mask = onehot_to_image(mask, net.n_classes)[0]
             if rgb_mask.shape[0] != out_size[0] or rgb_mask.size[1] != out_size[1]:
                 rgb_mask = cv2.resize(rgb_mask, out_size, interpolation=cv2.INTER_NEAREST)
 
-            proj = mask_to_image(proj)[0]
+            proj = onehot_to_image(proj, net.n_classes)[0]
             if proj.shape[0] != out_size[0] or proj.size[1] != out_size[1]:
                 proj = cv2.resize(proj, out_size, interpolation=cv2.INTER_NEAREST)
 

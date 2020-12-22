@@ -16,7 +16,7 @@ from torch.utils.data import DataLoader
 from eval import eval_net
 from unet import UNet
 from utils.conf_parser import parse_conf
-from utils.postprocess import preds_to_masks, mask_to_image
+from utils.postprocess import preds_to_masks, onehot_to_image
 
 def train_net(net, device, img_dir, mask_dir, val_names,  num_classes, opt='RMSprop',
               aug=None, cp_dir=None, log_dir=None, epochs=5, batch_size=1,
@@ -139,7 +139,7 @@ def train_net(net, device, img_dir, mask_dir, val_names,  num_classes, opt='RMSp
                     if vizualize:
                         # Postprocess predicted mask for tensorboard vizualization:
                         pred_masks = preds_to_masks(result['preds'], net.n_classes)
-                        pred_masks = mask_to_image(pred_masks)
+                        pred_masks = onehot_to_image(pred_masks, num_classes)
                         pred_masks = np.transpose(pred_masks, (0, 3, 1, 2))
                         pred_masks = pred_masks.astype(np.float32) / 255.0
                         pred_masks = pred_masks[...,::-1]

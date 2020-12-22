@@ -17,7 +17,7 @@ from torch.utils.data import DataLoader
 from eval import eval_stn
 from unet import CourtReconstruction
 from utils.conf_parser import parse_conf
-from utils.postprocess import preds_to_masks, mask_to_image
+from utils.postprocess import preds_to_masks, onehot_to_image
 
 
 def train_net(net, device, img_dir, mask_dir, val_names,  num_classes, opt='RMSprop',
@@ -142,14 +142,14 @@ def train_net(net, device, img_dir, mask_dir, val_names,  num_classes, opt='RMSp
                     if vizualize:
                         # Postprocess predicted mask for tensorboard vizualization:
                         pred_masks = preds_to_masks(result['preds'], net.n_classes)
-                        pred_masks = mask_to_image(pred_masks)
+                        pred_masks = onehot_to_image(pred_masks, num_classes)
                         pred_masks = np.transpose(pred_masks, (0, 3, 1, 2))
                         pred_masks = pred_masks.astype(np.float32) / 255.0
                         pred_masks = pred_masks[...,::-1]
 
                         projs = result['projs'] * num_classes
                         projs = projs.type(torch.IntTensor).cpu().numpy().astype(np.uint8)
-                        projs = mask_to_image(projs)
+                        projs = onehot_to_image(projs, num_classes)
                         projs = np.transpose(projs, (0, 3, 1, 2))
                         projs = projs.astype(np.float32) / 255.0
                         projs = projs[..., ::-1]

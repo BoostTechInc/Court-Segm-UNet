@@ -16,7 +16,7 @@ from torch.utils.data import DataLoader
 from eval import eval_reconstructor
 from models import Reconstructor
 from utils.conf_parser import parse_conf
-from utils.postprocess import preds_to_masks, mask_to_image
+from utils.postprocess import preds_to_masks, onehot_to_image
 
 
 def train_net(net, device, img_dir, mask_dir, val_names,  num_classes,
@@ -167,14 +167,14 @@ def train_net(net, device, img_dir, mask_dir, val_names,  num_classes,
                     if vizualize:
                         # Postprocess predicted mask for tensorboard vizualization:
                         pred_masks = preds_to_masks(result['logits'], net.n_classes)
-                        pred_masks = mask_to_image(pred_masks)
+                        pred_masks = onehot_to_image(pred_masks, num_classes)
                         pred_masks = np.transpose(pred_masks, (0, 3, 1, 2))
                         pred_masks = pred_masks.astype(np.float32) / 255.0
                         pred_masks = pred_masks[...,::-1]
 
                         rec_masks = result['rec_masks'] * num_classes
                         rec_masks = rec_masks.type(torch.IntTensor).cpu().numpy().astype(np.uint8)
-                        rec_masks = mask_to_image(rec_masks)
+                        rec_masks = onehot_to_image(rec_masks, num_classes)
                         rec_masks = np.transpose(rec_masks, (0, 3, 1, 2))
                         rec_masks = rec_masks.astype(np.float32) / 255.0
                         rec_masks = rec_masks[..., ::-1]

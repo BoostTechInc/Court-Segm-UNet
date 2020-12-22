@@ -18,7 +18,7 @@ def preds_to_masks(preds, n_classes=1, to_ndaray=True):
     return masks
 
 
-def mask_to_image(masks):
+def onehot_to_image(masks, n_classes=4):
     '''
     Convert grayscale mask to RGB image
     '''
@@ -26,12 +26,28 @@ def mask_to_image(masks):
         masks = np.expand_dims(masks, 0)    # add batch dim
     masks = np.expand_dims(masks, -1)       # add last dim, need for np.all()
 
-    # Gray mask to RGB image:
+    # Generate mapping:
+    mapping = {}
+    if n_classes == 4:
+        mapping[1] = (0, 255, 0)
+        mapping[2] = (255, 0, 0)
+        mapping[3] = (0, 0, 255)
+        mapping[4] = (255, 255, 255)
+    elif n_classes == 9:
+        mapping[1] = (0, 255, 0)
+        mapping[2] = (255, 0, 0)
+        mapping[3] = (0, 0, 255)
+        mapping[4] = (255, 255, 0)
+        mapping[5] = (255, 0, 255)
+        mapping[6] = (0, 255, 255)
+        mapping[7] = (255, 255, 255)
+    else:
+        raise NotImplementedError
+
+    # Apply mapping:
     rgb_masks = np.zeros((masks.shape[0], masks.shape[1], masks.shape[2], 3), dtype=np.uint8)
-    rgb_masks[np.all(masks == 1, axis=3)] = (0, 255, 0)
-    rgb_masks[np.all(masks == 2, axis=3)] = (255, 0, 0)
-    rgb_masks[np.all(masks == 3, axis=3)] = (0, 0, 255)
-    rgb_masks[np.all(masks == 4, axis=3)] = (255, 255, 255)
+    for id, color in mapping.items():
+        rgb_masks[np.all(masks == id, axis=3)] = color
 
     return rgb_masks
 

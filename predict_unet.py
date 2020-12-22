@@ -10,7 +10,7 @@ from tqdm import tqdm
 
 from unet import UNet
 from utils.dataset import BasicDataset
-from utils.postprocess import preds_to_masks, mask_to_image
+from utils.postprocess import preds_to_masks, onehot_to_image
 
 
 def predict_img(net,
@@ -98,7 +98,7 @@ def test(net, input_paths, output_paths, input_size):
             mask = predict_img(net=net, full_img=img, input_size=input_size, device=device)
 
             # Postprocessing:
-            rgb_mask = mask_to_image(mask)[0]
+            rgb_mask = onehot_to_image(mask, net.n_classes)[0]
             if rgb_mask.shape[0] != img_size[0] or rgb_mask.size[1] != img_size[1]:
                 rgb_mask = cv2.resize(rgb_mask, img_size, interpolation=cv2.INTER_NEAREST)
 

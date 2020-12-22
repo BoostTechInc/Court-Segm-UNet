@@ -10,7 +10,7 @@ from tqdm import tqdm
 
 from models import Reconstructor
 from utils.dataset import BasicDataset, load_template
-from utils.postprocess import preds_to_masks, mask_to_image
+from utils.postprocess import onehot_to_image
 
 
 def predict(net, full_img, device, input_size, warp=True):
@@ -56,7 +56,7 @@ def test(net, input_paths, out_paths, in_size, out_size, warp):
             _, mask = predict(net=net, full_img=img, input_size=in_size, device=device, warp=warp)
 
             # Postprocessing:
-            mask = mask_to_image(mask)[0]
+            mask = onehot_to_image(mask, net.n_classes)[0]
             if mask.shape[0] != out_size[0] or mask.size[1] != out_size[1]:
                 mask = cv2.resize(mask, out_size, interpolation=cv2.INTER_NEAREST)
 
