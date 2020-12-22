@@ -28,7 +28,7 @@ def onehot_to_image(masks, n_classes=4):
 
     # Generate mapping:
     mapping = {}
-    if n_classes == 3:
+    if n_classes == 4:
         mapping[1] = (0, 255, 0)
         mapping[2] = (255, 0, 0)
         mapping[3] = (0, 0, 255)
