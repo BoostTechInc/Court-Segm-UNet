@@ -36,16 +36,16 @@ def onehot_to_image(masks, n_classes=4):
         mapping[1] = (0, 255, 0)
         mapping[2] = (255, 0, 0)
         mapping[3] = (0, 0, 255)
-        mapping[4] = (255, 0, 255)
-        mapping[5] = (0, 255, 255)
-        mapping[6] = (255, 255, 255)
+        mapping[4] = (255, 255, 255)
+        mapping[5] = (255, 0, 255)
+        mapping[6] = (0, 255, 255)
     elif n_classes == 8:
         mapping[1] = (0, 255, 0)
         mapping[2] = (255, 0, 0)
         mapping[3] = (0, 0, 255)
-        mapping[4] = (255, 0, 255)
-        mapping[5] = (0, 255, 255)
-        mapping[6] = (255, 255, 255)
+        mapping[4] = (255, 255, 255)
+        mapping[5] = (255, 0, 255)
+        mapping[6] = (0, 255, 255)
         mapping[7] = (255, 255, 0)
     else:
         raise NotImplementedError
