@@ -91,7 +91,7 @@ def eval_reconstructor(net, loader, device, verbose=False):
         gt_masks = gt.to(dtype=torch.float32) / float(net.n_classes)
 
         with torch.no_grad():
-            logits, rec_masks = net(imgs)
+            logits, rec_masks, _ = net(imgs)
 
         # Scores:
         ce_score += F.cross_entropy(logits, gt).item()

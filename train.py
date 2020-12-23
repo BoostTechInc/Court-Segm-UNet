@@ -20,17 +20,17 @@ from utils.postprocess import preds_to_masks, onehot_to_image
 
 
 def train_net(net, device, img_dir, mask_dir, val_names,  num_classes,
-              opt='RMSprop', aug=None, cp_dir=None, log_dir=None,
+              homo_dir=None, opt='RMSprop', aug=None, cp_dir=None, log_dir=None,
               epochs=5, batch_size=1, lr=0.0001, w_decay=1e-8,
-              rec_lambda=10.0, target_size=(1280,720), recon_loss ='MSE',
-              vizualize=False):
+              rec_lambda=10.0, homo_lambda=0.01, target_size=(1280,720),
+              recon_loss ='MSE', vizualize=False):
     '''
     Train UNet+UNetReg+ResNetReg model
     '''
     # Prepare dataset:
     train_ids, val_ids = split_on_train_val(img_dir, val_names)
-    train = BasicDataset(train_ids, img_dir, mask_dir, num_classes, target_size, aug=aug)
-    val = BasicDataset(val_ids, img_dir, mask_dir, num_classes, target_size)
+    train = BasicDataset(train_ids, img_dir, mask_dir, num_classes, target_size, aug=aug, homo_dir=homo_dir)
+    val = BasicDataset(val_ids, img_dir, mask_dir, num_classes, target_size, homo_dir=homo_dir)
     train_loader = DataLoader(train, batch_size=batch_size, shuffle=True, num_workers=8,
                               pin_memory=True, worker_init_fn=worker_init_fn)
     val_loader = DataLoader(val, batch_size=batch_size, shuffle=False, num_workers=8,
@@ -48,11 +48,13 @@ def train_net(net, device, img_dir, mask_dir, val_names,  num_classes,
         Learning rate:   {lr}
         Weight decay:    {w_decay}
         Reconstruction:  {recon_loss}
-        Lambda:          {rec_lambda}
+        Rec Lambda:      {rec_lambda}
+        Homo Lambda:     {homo_lambda}
         Training size:   {n_train}
         Validation size: {n_val}
         Images dir:      {img_dir}
         Masks dir:       {mask_dir}
+        Homography dir:  {homo_dir}
         Checkpoints dir: {cp_dir}
         Log dir:         {log_dir}
         Device:          {device.type}
@@ -89,6 +91,11 @@ def train_net(net, device, img_dir, mask_dir, val_names,  num_classes,
     else:
         raise NotImplementedError
 
+    if homo_dir is not None:
+        homo_criterion = nn.SmoothL1Loss()
+    else:
+        homo_criterion = None
+
     global_step = 0
 
     # Training loop:
@@ -101,6 +108,7 @@ def train_net(net, device, img_dir, mask_dir, val_names,  num_classes,
                 # Get data:
                 imgs = batch['image']
                 true_masks = batch['mask']
+                gt_homos = batch['homo'] if 'homo' in batch else None
                 assert imgs.shape[1] == net.n_channels, \
                     f'Network has been defined with {net.n_channels} input channels, ' \
                     f'but loaded images have {imgs.shape[1]} channels. Please check that ' \
@@ -109,9 +117,11 @@ def train_net(net, device, img_dir, mask_dir, val_names,  num_classes,
                 # CPU -> GPU:
                 imgs = imgs.to(device=device, dtype=torch.float32)
                 true_masks = true_masks.to(device=device)
+                if gt_homos is not None:
+                    gt_homos = gt_homos.to(device=device, dtype=torch.float32)
 
                 # Forward:
-                logits, rec_masks = net(imgs)
+                logits, rec_masks, homos = net(imgs)
 
                 # Caluclate CrossEntropy loss:
                 ce_loss = criterion(logits, true_masks)
@@ -120,16 +130,28 @@ def train_net(net, device, img_dir, mask_dir, val_names,  num_classes,
                 gt_masks = true_masks.to(dtype=torch.float32) / float(num_classes)
                 rec_loss = rec_criterion(rec_masks, gt_masks) * rec_lambda
 
+                # Calculate a regression loss for homography:
+                homo_lambda = 0.01
+                if homo_criterion is not None and gt_homos is not None:
+                    homo_loss = homo_criterion(homos, gt_homos) * homo_lambda
+                else:
+                    homo_loss = None
+
                 # Total loss:
                 loss = ce_loss + rec_loss
+                if homo_loss is not None:
+                    loss += homo_loss
                 epoch_loss += loss.item()
 
                 # Log:
                 writer.add_scalar('Loss/train', loss.item(), global_step)
                 writer.add_scalar('Loss/train CE', ce_loss.item(), global_step)
                 writer.add_scalar('Loss/train rec2', rec_loss.item(), global_step)
+                if homo_loss is not None:
+                    writer.add_scalar('Loss/train homo', homo_loss.item(), global_step)
                 pbar.set_postfix(**{'CE_loss': ce_loss.item(),
                                     'Rec_loss': rec_loss.item(),
+                                    'Homo_loss': homo_loss.item() if homo_loss is not None else 0,
                                     'Tot loss': loss.item(),})
 
                 # Backward:
@@ -205,6 +227,8 @@ def get_args():
                         help='Path to dir containing traininmg images')
     parser.add_argument('-md', '--mask_dir', dest='mask_dir', type=str, default=None,
                         help='Path to dir containing masks for given images')
+    parser.add_argument('--homo_dir', dest='homo_dir', type=str, default=None,
+                        help='Path to dir containing homography matrices for given images')
     parser.add_argument('-vn', '--val_names', dest='val_names', type=str, default=None,
                         help='List of video names that will be used in validation step')
     parser.add_argument('-cd', '--cp_dir', dest='cp_dir', type=str, default=None,
@@ -221,6 +245,8 @@ def get_args():
                         help='Weight decay', dest='weight_decay')
     parser.add_argument('--rec_lambda', type=float, default=10.0,
                         help='Lambda for reconstruction loss')
+    parser.add_argument('--homo_lambda', type=float, default=0.01,
+                        help='Lambda for homography loss')
     parser.add_argument('-f', '--load', dest='load', type=str, default=False,
                         help='Load model from a .pth file')
     parser.add_argument('-s', '--size', dest='size', default=(640,360),
@@ -321,6 +347,7 @@ if __name__ == '__main__':
                   cp_dir=args.cp_dir,
                   log_dir=args.log_dir,
                   num_classes=args.n_classes,
+                  homo_dir=args.homo_dir,
                   aug=args.aug,
                   opt=args.opt,
                   epochs=args.epochs,
@@ -328,6 +355,7 @@ if __name__ == '__main__':
                   lr=args.lr,
                   w_decay=args.weight_decay,
                   rec_lambda=args.rec_lambda,
+                  homo_lambda=args.homo_lambda,
                   target_size=args.size,
                   recon_loss=args.rec_loss,
                   vizualize=args.viz)

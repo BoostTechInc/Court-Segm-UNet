@@ -116,7 +116,7 @@ class Reconstructor(nn.Module):
         theta = self.resnet_reg(logits)
         rec_mask = self.warp(theta, self.template)
 
-        return logits, rec_mask
+        return logits, rec_mask, theta
 
     def predict(self, x, warp=False):
         '''Predicts the transformation matrix (theta) from input image (x).
