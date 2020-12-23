@@ -128,25 +128,25 @@ def train_net(net, device, img_dir, mask_dir, val_names,  num_classes,
 
                 # Calculate reconstruction loss for regressors:
                 gt_masks = true_masks.to(dtype=torch.float32) / float(num_classes)
-                rec_loss = rec_criterion(rec_masks, gt_masks) * rec_lambda
+                rec_loss = rec_criterion(rec_masks, gt_masks)
 
                 # Calculate a regression loss for homography:
                 homo_lambda = 0.01
                 if homo_criterion is not None and gt_homos is not None:
-                    homo_loss = homo_criterion(homos, gt_homos) * homo_lambda
+                    homo_loss = homo_criterion(homos, gt_homos)
                 else:
                     homo_loss = None
 
                 # Total loss:
-                loss = ce_loss + rec_loss
+                loss = ce_loss + rec_loss * rec_lambda
                 if homo_loss is not None:
-                    loss += homo_loss
+                    loss += homo_loss * homo_lambda
                 epoch_loss += loss.item()
 
                 # Log:
                 writer.add_scalar('Loss/train', loss.item(), global_step)
                 writer.add_scalar('Loss/train CE', ce_loss.item(), global_step)
-                writer.add_scalar('Loss/train rec2', rec_loss.item(), global_step)
+                writer.add_scalar('Loss/train rec', rec_loss.item(), global_step)
                 if homo_loss is not None:
                     writer.add_scalar('Loss/train homo', homo_loss.item(), global_step)
                 pbar.set_postfix(**{'CE_loss': ce_loss.item(),
