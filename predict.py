@@ -10,7 +10,7 @@ from tqdm import tqdm
 
 from models import Reconstructor
 from utils.dataset import BasicDataset, load_template
-from utils.postprocess import onehot_to_image
+from utils.postprocess import onehot_to_image, overlay
 
 
 def predict(net, full_img, device, input_size, warp=True):
@@ -43,7 +43,7 @@ def get_img_paths(src_dir, dst_dir):
     return input_paths, out_paths
 
 
-def test(net, input_paths, out_paths, in_size, out_size, warp):
+def test(net, input_paths, out_paths, in_size, out_size, warp, blend=False):
     # Loop over all images:
     paths = zip(input_paths, out_paths)
 
@@ -60,7 +60,14 @@ def test(net, input_paths, out_paths, in_size, out_size, warp):
             if mask.shape[0] != out_size[0] or mask.size[1] != out_size[1]:
                 mask = cv2.resize(mask, out_size, interpolation=cv2.INTER_NEAREST)
 
-            # Save:
+            if blend:
+                img_np = np.array(img)
+                if img_np.shape[0] != out_size[0] or img_np.size[1] != out_size[1]:
+                    img_np = cv2.resize(img_np, out_size)
+                img_np = cv2.cvtColor(img_np, cv2.COLOR_BGR2RGB)
+                mask = overlay(img_np, mask)
+
+                # Save:
             cv2.imwrite(out_path, mask)
 
             pbar.update()
@@ -93,6 +100,8 @@ def get_args():
                         help='Specify ResNetReg model parameters')
     parser.add_argument('--warp', action='store_true', default=True,
                         help="Whether need to warp the template using the predicted transformation matrix or not")
+    parser.add_argument('--blend', action='store_true', default=False,
+                        help="Whether need to blend the mask and frame or not")
 
     return parser.parse_args()
 
@@ -102,19 +111,22 @@ if __name__ == "__main__":
 
     # Get params:
     args = get_args()
-    args.model = '/home/darkalert/builds/Court-Segm-UNet/checkpoints/NCAAM80k_kornia_640x360_aug_deconv_reconstructor2/CP_epoch5.pth'
-    args.temp_path = '/home/darkalert/BoostJob/camera_calibration/college_court_masks/mask_template_v3_3_end_4k.png'
+    args.model = '/home/darkalert/builds/Court-Segm-UNet/checkpoints/NCAA2020+--640x360_rec-nc7-deconv-mse_scratch/CP_epoch1.pth'
+    args.temp_path = '/home/darkalert/builds/Court-Segm-UNet/assets/mask_ncaa_v4_wo-center_m_onehot.png'
 
-    args.src_dir = '/media/darkalert/c02b53af-522d-40c5-b824-80dfb9a11dbb/boost/datasets/court_segmentation/NCAAM/frames_test/'
-    args.dst_dir = '/media/darkalert/c02b53af-522d-40c5-b824-80dfb9a11dbb/boost/datasets/court_segmentation/NCAAM/_test/reconstructed/NCAAM80k_kornia_640x360_aug_deconv_reconstructor/'
+    args.src_dir = '/media/darkalert/c02b53af-522d-40c5-b824-80dfb9a11dbb/boost/datasets/court_segmentation/NCAA2020+/frames/'
+    args.dst_dir = '/media/darkalert/c02b53af-522d-40c5-b824-80dfb9a11dbb/boost/datasets/court_segmentation/NCAA2020+/test/NCAA2020+--640x360_rec-nc7-deconv-mse_scratch/'
 
     args.bilinear = False
-    args.n_classes = 4
+    args.n_classes = 7
     args.resnet = 'resnetreg18'
+
+    args.blend = True
 
     # Get videos:
     # video_names = [n for n in os.listdir(args.src_dir) if os.path.isdir(os.path.join(args.src_dir, n))]
-    video_names = ['train_AnthonyEdwards_5_Isolation_Offense_2019-2020_NCAAM']
+    video_names = ['JamalBey_0_Transition_PossessionsAndAssists_Offense_2019-2020_NCAAM']
+    # video_names = ['2020_11_25_RhodeIsland_at_ArizonaState']
 
     # CUDA or CPU:
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -152,6 +164,8 @@ if __name__ == "__main__":
 
         input_paths, out_paths = get_img_paths(src_dir, dst_dir)
 
-        test(net, input_paths, out_paths, in_size=args.input_size, out_size=args.output_size, warp=args.warp)
+        test(net, input_paths, out_paths,
+             in_size=args.input_size, out_size=args.output_size,
+             warp=args.warp, blend=args.blend)
 
     logging.info('All done!')

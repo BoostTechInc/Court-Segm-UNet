@@ -1,7 +1,7 @@
+import cv2
 import numpy as np
 import torch
 import torch.nn.functional as F
-
 
 
 def preds_to_masks(preds, n_classes=1, to_ndaray=True):
@@ -57,6 +57,12 @@ def onehot_to_image(masks, n_classes=4):
 
     return rgb_masks
 
+def overlay(frame, mask):
+    m = cv2.inRange(mask, (0, 0, 0), (0, 0, 0))
+    m = cv2.merge([m, m, m])
+    overlaid = (frame & m) + mask*0.5 + (frame & (255 - m))*0.5
+
+    return overlaid.astype('uint8')
 
 # def transform():
 #     from torchvision import transforms
