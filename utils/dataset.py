@@ -29,6 +29,9 @@ def split_on_train_val(img_dir, val_names):
         subdir = os.path.join(img_dir, name)
         ids = [os.path.join(name,file.split('.jpeg')[0])
                for file in listdir(subdir) if not file.endswith('.')]
+        if name[0] == '2':        # DUCK TAPE!!!!!!!!!
+            print ('skip', name)
+            continue
         if any(name == n for n in val_names):
             val_ids += ids
         else:
