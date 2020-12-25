@@ -20,7 +20,7 @@ class Reconstructor(nn.Module):
                  bilinear=True,
                  resnet_name='resnetreg50',
                  resnet_pretrained=None,
-                 warp_by_nearest=False):
+                 warp_with_nearest=False):
         super(Reconstructor, self).__init__()
         self.n_channels = n_channels
         self.n_classes = n_classes
@@ -39,10 +39,9 @@ class Reconstructor(nn.Module):
         self.up4 = Up(128, 64, bilinear)
         self.outc = OutConv(64, n_classes)
 
-        # UNet gegressor that outputs the first 3x3 transformation matrix:
-        #reg_channels = 8
-        #self.conv_top = nn.Conv2d(1024 // factor, reg_channels, kernel_size=1)
-        #self.unet_reg = Reconstructor.make_regressor(reg_channels)
+        # UNet regressor that outputs the first 3x3 transformation matrix:
+        # self.conv_top = nn.Conv2d(1024 // factor, n_classes, kernel_size=1)
+        # self.unet_reg = Reconstructor.make_regressor(n_classes)
 
         # ResNet regressor that outputs the second 3x3 transformation matrix:
         self.resnet_reg = resnet(resnet_name, resnet_pretrained, n_classes)
@@ -52,7 +51,7 @@ class Reconstructor(nn.Module):
 
         # STN warper:
         h, w = target_size[1], target_size[0]
-        if warp_by_nearest is False:
+        if warp_with_nearest is False:
             self.warper = kornia.HomographyWarper(h, w)
         else:
             # It seems mode='nearest' has a bug when used during training
@@ -109,8 +108,8 @@ class Reconstructor(nn.Module):
         logits, x_top = self.forward_unet(x)
 
         # UNet regressor:
-        #theta = self.regress(x_top)
-        #rec_mask = self.warp(theta, self.template)
+        # theta = self.regress(x_top)
+        # rec_mask = self.warp(theta, self.template)
 
         # ResNet regressor:
         theta = self.resnet_reg(logits)

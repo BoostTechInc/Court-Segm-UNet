@@ -313,7 +313,7 @@ if __name__ == '__main__':
                         bilinear=args.bilinear,
                         resnet_name=args.resnet['name'],
                         resnet_pretrained=args.resnet['pretrained'],
-                        warp_by_nearest=True)
+                        warp_with_nearest=False)
     logging.info(f'Network Reconstructor (UNet+UNetReg+ResNetReg):\n'
                  f'\t{net.n_channels} input channels\n'
                  f'\t{net.n_classes} output channels (classes)\n'
