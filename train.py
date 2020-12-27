@@ -207,6 +207,14 @@ def train_net(net, device, img_dir, mask_dir, val_names,  num_classes,
                         # Save the results for tensorboard vizualization:
                         writer.add_images('output', output, global_step)
 
+
+                        # import cv2
+                        # output2 = np.transpose(output, (0, 2, 3, 1)) * 255.0
+                        # for ii, out_img in enumerate(output2):
+                        #     out_img = cv2.cvtColor(out_img, cv2.COLOR_BGR2RGB)
+                        #     out_path = '/media/darkalert/c02b53af-522d-40c5-b824-80dfb9a11dbb/boost/datasets/court_segmentation/NCAA2020+_dev/test/' + str(ii) + '.png'
+                        #     cv2.imwrite(out_path, out_img)
+
         # Save checkpoint:
         if cp_dir is not None:
             try:
