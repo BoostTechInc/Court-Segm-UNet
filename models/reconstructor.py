@@ -124,9 +124,9 @@ class Reconstructor(nn.Module):
         theta = self.resnet_reg(logits)
 
         if warp:
-            mask = self.warp(theta, self.template)
+            rec_mask = self.warp(theta, self.template)
         else:
-            mask = None
+            rec_mask = None
 
-        return theta, mask
+        return logits, rec_mask, theta
 

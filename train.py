@@ -12,6 +12,7 @@ from torch import optim
 from torch.utils.tensorboard import SummaryWriter
 from utils.dataset import BasicDataset, split_on_train_val, worker_init_fn, load_template
 from torch.utils.data import DataLoader
+import kornia
 
 from eval import eval_reconstructor
 from models import Reconstructor
@@ -20,10 +21,11 @@ from utils.postprocess import preds_to_masks, onehot_to_image
 
 
 def train_net(net, device, img_dir, mask_dir, val_names,  num_classes,
+              seg_loss, rec_loss, seg_lambda, rec_lambda, homo_lambda,
               homo_dir=None, opt='RMSprop', aug=None, cp_dir=None, log_dir=None,
               epochs=5, batch_size=1, lr=0.0001, w_decay=1e-8,
-              rec_lambda=10.0, homo_lambda=0.01, target_size=(1280,720),
-              recon_loss ='MSE', vizualize=False):
+              target_size=(1280,720),
+              vizualize=False):
     '''
     Train UNet+UNetReg+ResNetReg model
     '''
@@ -47,7 +49,9 @@ def train_net(net, device, img_dir, mask_dir, val_names,  num_classes,
         Batch size:      {batch_size}
         Learning rate:   {lr}
         Weight decay:    {w_decay}
-        Reconstruction:  {recon_loss}
+        Segmentation:    {seg_loss}
+        Reconstruction:  {rec_loss}
+        Seg Lambda:      {seg_lambda}
         Rec Lambda:      {rec_lambda}
         Homo Lambda:     {homo_lambda}
         Training size:   {n_train}
@@ -79,14 +83,16 @@ def train_net(net, device, img_dir, mask_dir, val_names,  num_classes,
                                                      'min' if net.n_classes > 1 else 'max', patience=3)
 
     # Losses:
-    if net.n_classes > 1:
+    if seg_loss == 'CE':
         criterion = nn.CrossEntropyLoss()
+    elif seg_loss == 'focal':
+        criterion = kornia.losses.FocalLoss(alpha=1.0, gamma=2.0, reduction='mean')
     else:
-        criterion = nn.BCEWithLogitsLoss()
+        raise NotImplementedError
 
-    if recon_loss == 'MSE':
+    if rec_loss == 'MSE':
         rec_criterion = nn.MSELoss()
-    elif recon_loss == 'SmoothL1':
+    elif rec_loss == 'SmoothL1':
         rec_criterion = nn.SmoothL1Loss()
     else:
         raise NotImplementedError
@@ -131,25 +137,24 @@ def train_net(net, device, img_dir, mask_dir, val_names,  num_classes,
                 rec_loss = rec_criterion(rec_masks, gt_masks)
 
                 # Calculate a regression loss for homography:
-                homo_lambda = 0.01
                 if homo_criterion is not None and gt_homos is not None:
                     homo_loss = homo_criterion(homos, gt_homos)
                 else:
                     homo_loss = None
 
                 # Total loss:
-                loss = ce_loss + rec_loss * rec_lambda
+                loss = ce_loss * seg_lambda + rec_loss * rec_lambda
                 if homo_loss is not None:
                     loss += homo_loss * homo_lambda
                 epoch_loss += loss.item()
 
                 # Log:
                 writer.add_scalar('Loss/train', loss.item(), global_step)
-                writer.add_scalar('Loss/train CE', ce_loss.item(), global_step)
+                writer.add_scalar('Loss/train seg', ce_loss.item(), global_step)
                 writer.add_scalar('Loss/train rec', rec_loss.item(), global_step)
                 if homo_loss is not None:
                     writer.add_scalar('Loss/train homo', homo_loss.item(), global_step)
-                pbar.set_postfix(**{'CE_loss': ce_loss.item(),
+                pbar.set_postfix(**{'Seg_loss': ce_loss.item(),
                                     'Rec_loss': rec_loss.item(),
                                     'Homo_loss': homo_loss.item() if homo_loss is not None else 0,
                                     'Tot loss': loss.item(),})
@@ -251,10 +256,12 @@ def get_args():
                         help='Learning rate', dest='lr')
     parser.add_argument('-wd', '--weight-decay', metavar='WD', type=float, nargs='?', default=1e-8,
                         help='Weight decay', dest='weight_decay')
+    parser.add_argument('--seg_lambda', type=float, default=1.0,
+                        help='Weighting factor for segmentation loss')
     parser.add_argument('--rec_lambda', type=float, default=10.0,
-                        help='Lambda for reconstruction loss')
+                        help='Weighting factor for reconstruction loss')
     parser.add_argument('--homo_lambda', type=float, default=0.01,
-                        help='Lambda for homography loss')
+                        help='Weighting factor for homography loss')
     parser.add_argument('-f', '--load', dest='load', type=str, default=False,
                         help='Load model from a .pth file')
     parser.add_argument('-s', '--size', dest='size', default=(640,360),
@@ -281,6 +288,8 @@ def get_args():
                         help='Specify ResNetReg model parameters')
     parser.add_argument('--rec_loss', type=str, default='MSE',
                         help='Whether to use MSE or SmoothL1 as reconstruction loss')
+    parser.add_argument('--seg_loss', type=str, default='CE',
+                        help='Segmentation loss. Can be \'CE\' (Cross Entropy) or \'focal\' (Focal loss)')
 
     return parser.parse_args()
 
@@ -356,6 +365,11 @@ if __name__ == '__main__':
                   cp_dir=args.cp_dir,
                   log_dir=args.log_dir,
                   num_classes=args.n_classes,
+                  rec_loss=args.rec_loss,
+                  seg_loss=args.seg_loss,
+                  seg_lambda=args.seg_lambda,
+                  rec_lambda=args.rec_lambda,
+                  homo_lambda=args.homo_lambda,
                   homo_dir=args.homo_dir,
                   aug=args.aug,
                   opt=args.opt,
@@ -363,10 +377,7 @@ if __name__ == '__main__':
                   batch_size=args.batchsize,
                   lr=args.lr,
                   w_decay=args.weight_decay,
-                  rec_lambda=args.rec_lambda,
-                  homo_lambda=args.homo_lambda,
                   target_size=args.size,
-                  recon_loss=args.rec_loss,
                   vizualize=args.viz)
     except KeyboardInterrupt:
         save_model()

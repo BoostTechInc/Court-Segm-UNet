@@ -10,10 +10,14 @@ from tqdm import tqdm
 
 from models import Reconstructor
 from utils.dataset import BasicDataset, load_template
-from utils.postprocess import onehot_to_image, overlay
+from utils.postprocess import preds_to_masks, onehot_to_image, overlay
 
 
-def predict(net, full_img, device, input_size, warp=True):
+def predict(net, full_img, device, input_size, mask_way='warp'):
+    '''
+    :mask_type: Sets the way to obtain the mask. Сan take 'warp' or 'segm'
+    '''
+
     # Preprocess input image:
     img = BasicDataset.preprocess_img(full_img, input_size)
     img = img.unsqueeze(0)
@@ -23,27 +27,27 @@ def predict(net, full_img, device, input_size, warp=True):
 
     # Predict:
     with torch.no_grad():
-        theta, rec_mask = net.predict(img, warp=warp)
+        logits, rec_mask, theta = net.predict(img, warp=True if mask_way=='warp' else False)
 
-    # Tensors to ndarrays:
-    if warp:
-        rec_mask = rec_mask * net.n_classes
-        mask = rec_mask.type(torch.IntTensor).cpu().numpy().astype(np.uint8)
+    if mask_way == 'warp':
+        mask = rec_mask * net.n_classes
+        mask = mask.type(torch.IntTensor).cpu().numpy().astype(np.uint8)
+    elif mask_way == 'segm':
+        mask = preds_to_masks(logits, net.n_classes)
     else:
-        mask = None
+        raise NotImplementedError
 
-    return theta, mask
-
+    return mask, theta
 
 def get_img_paths(src_dir, dst_dir):
     names = [file for file in os.listdir(src_dir) if not file.endswith('.')]
     input_paths = [os.path.join(src_dir, n) for n in names]
-    out_paths = [os.path.join(dst_dir, n.split('.')[0] + '.png') for n in names]
+    out_paths = [os.path.join(dst_dir, n.split('.')[0]) for n in names]
 
     return input_paths, out_paths
 
 
-def test(net, input_paths, out_paths, in_size, out_size, warp, blend=False):
+def test(net, input_paths, out_paths, in_size, out_size, mask_way='warp', blend=False, out_format='jpeg'):
     # Loop over all images:
     paths = zip(input_paths, out_paths)
 
@@ -53,7 +57,7 @@ def test(net, input_paths, out_paths, in_size, out_size, warp, blend=False):
             img = Image.open(in_path)
 
             # Predict:
-            _, mask = predict(net=net, full_img=img, input_size=in_size, device=device, warp=warp)
+            mask, _ = predict(net=net, full_img=img, input_size=in_size, device=device, mask_way=mask_way)
 
             # Postprocessing:
             mask = onehot_to_image(mask, net.n_classes)[0]
@@ -67,8 +71,15 @@ def test(net, input_paths, out_paths, in_size, out_size, warp, blend=False):
                 img_np = cv2.cvtColor(img_np, cv2.COLOR_BGR2RGB)
                 mask = overlay(img_np, mask)
 
-                # Save:
-            cv2.imwrite(out_path, mask)
+            # Save:
+            if out_format == 'jpeg':
+                out_path += '.jpeg'
+                cv2.imwrite(out_path, mask, [cv2.IMWRITE_JPEG_QUALITY, 90])
+            elif out_format == 'png':
+                out_path += '.png'
+                cv2.imwrite(out_path, mask)
+            else:
+                raise NotImplementedError
 
             pbar.update()
 
@@ -98,8 +109,8 @@ def get_args():
                         help='Path to court template that will be projected by affine matrix')
     parser.add_argument('--resnet', type=str, default='resnetreg18',
                         help='Specify ResNetReg model parameters')
-    parser.add_argument('--warp', action='store_true', default=True,
-                        help="Whether need to warp the template using the predicted transformation matrix or not")
+    parser.add_argument('--mask_way', type=str, default='warp',
+                        help="Sets the way to obtain the mask. Сan take \'warp\' or \'segm\'")
     parser.add_argument('--blend', action='store_true', default=False,
                         help="Whether need to blend the mask and frame or not")
 
@@ -111,21 +122,22 @@ if __name__ == "__main__":
 
     # Get params:
     args = get_args()
-    args.model = '/home/darkalert/builds/Court-Segm-UNet/checkpoints/NCAA2020+--640x360_rec-nc7-deconv-mse_scratch/CP_epoch1.pth'
-    args.temp_path = '/home/darkalert/builds/Court-Segm-UNet/assets/mask_ncaa_v4_wo-center_m_onehot.png'
+    args.model = '/home/darkalert/builds/Court-Segm-UNet/checkpoints/NCAA2020+v2-640x360_aug-app-geo_rec-nc4-deconv-mse-rlam10_pre/CP_epoch6.pth'
+    args.temp_path = '/home/darkalert/builds/Court-Segm-UNet/assets/mask_ncaa_v4_nc4_m_onehot.png'
 
-    args.src_dir = '/media/darkalert/c02b53af-522d-40c5-b824-80dfb9a11dbb/boost/datasets/court_segmentation/NCAA2020+/frames/'
-    args.dst_dir = '/media/darkalert/c02b53af-522d-40c5-b824-80dfb9a11dbb/boost/datasets/court_segmentation/NCAA2020+/test/NCAA2020+--640x360_rec-nc7-deconv-mse_scratch/'
+    args.src_dir = '/media/darkalert/c02b53af-522d-40c5-b824-80dfb9a11dbb/boost/datasets/player_tracking/frames/'
+    args.dst_dir = '/media/darkalert/c02b53af-522d-40c5-b824-80dfb9a11dbb/boost/datasets/player_tracking/court_mapping_mse_segm/'
 
     args.bilinear = False
-    args.n_classes = 7
+    args.n_classes = 4
     args.resnet = 'resnetreg18'
 
     args.blend = True
+    args.mask_way = 'segm'
 
     # Get videos:
-    # video_names = [n for n in os.listdir(args.src_dir) if os.path.isdir(os.path.join(args.src_dir, n))]
-    video_names = ['JamalBey_0_Transition_PossessionsAndAssists_Offense_2019-2020_NCAAM']
+    video_names = [n for n in os.listdir(args.src_dir) if os.path.isdir(os.path.join(args.src_dir, n))]
+    # video_names = ['JamalBey_0_Transition_PossessionsAndAssists_Offense_2019-2020_NCAAM']
     # video_names = ['2020_11_25_RhodeIsland_at_ArizonaState']
 
     # CUDA or CPU:
@@ -135,7 +147,7 @@ if __name__ == "__main__":
     # Load the court template:
     template = load_template(args.temp_path,
                              num_classes=args.n_classes,
-                             target_size=None,#args.output_size,
+                             target_size=args.output_size,
                              batch_size=1)
     template = template.to(device=device)
 
@@ -146,7 +158,7 @@ if __name__ == "__main__":
                         target_size=args.output_size,
                         bilinear=args.bilinear,
                         resnet_name=args.resnet,
-                        warp_by_nearest=True)
+                        warp_with_nearest=True)
     logging.info("Loading model from {}".format(args.model))
     net.to(device=device)
     net.load_state_dict(torch.load(args.model, map_location=device))
@@ -166,6 +178,6 @@ if __name__ == "__main__":
 
         test(net, input_paths, out_paths,
              in_size=args.input_size, out_size=args.output_size,
-             warp=args.warp, blend=args.blend)
+             mask_way=args.mask_way, blend=args.blend)
 
     logging.info('All done!')
