@@ -32,6 +32,9 @@ def split_on_train_val(img_dir, val_names):
         if any(name == n for n in val_names):
             val_ids += ids
         else:
+            if name[0] == '2':
+                print('Skip', name)
+                continue
             train_ids += ids
 
     logging.info(f'Data has been splitted. Train ids: {len(train_ids)}, val ids: {len(val_ids)}')
