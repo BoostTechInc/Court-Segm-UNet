@@ -44,7 +44,7 @@ class Reconstructor(nn.Module):
         # self.unet_reg = Reconstructor.make_regressor(n_classes)
 
         # ResNet regressor that outputs the second 3x3 transformation matrix:
-        self.resnet_reg = resnet(resnet_name, resnet_pretrained, n_classes)
+        self.resnet_reg = resnet(resnet_name, resnet_pretrained, n_classes+3)
 
         # Court template that will be warped by the learnt transformation matrix:
         self.template = template
@@ -112,7 +112,9 @@ class Reconstructor(nn.Module):
         # rec_mask = self.warp(theta, self.template)
 
         # ResNet regressor:
-        theta = self.resnet_reg(logits)
+        t = torch.cat((logits, x), 1)
+        theta = self.resnet_reg(t)
+        # theta = self.resnet_reg(logits)
         rec_mask = self.warp(theta, self.template)
 
         return logits, rec_mask, theta
