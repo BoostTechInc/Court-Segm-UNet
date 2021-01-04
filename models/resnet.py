@@ -277,17 +277,17 @@ def resnetreg18(pretrained_path: str = None, in_channels: int = 4) -> ResNetReg:
 
     return resnet
 
-def resnetreg34(pretrained_path: str = None) -> ResNetReg:
+def resnetreg34(pretrained_path: str = None, in_channels: int = 4) -> ResNetReg:
     r"""ResNetReg-34 model
     """
-    resnet = _make_resnet(BasicBlock, [3, 4, 6, 3], pretrained_path)
+    resnet = _make_resnet(BasicBlock, [3, 4, 6, 3], pretrained_path, in_channels)
 
     return resnet
 
-def resnetreg50(pretrained_path: str = None) -> ResNetReg:
+def resnetreg50(pretrained_path: str = None, in_channels: int = 4) -> ResNetReg:
     r"""ResNetReg-50 model
     """
-    resnet = _make_resnet(Bottleneck, [3, 4, 6, 3], pretrained_path)
+    resnet = _make_resnet(Bottleneck, [3, 4, 6, 3], pretrained_path, in_channels)
 
     return resnet
 
