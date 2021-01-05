@@ -186,7 +186,7 @@ def train_net(net, device, img_dir, mask_dir, val_names,  num_classes,
                     # Validation log:
                     writer.add_scalar('learning_rate', optimizer.param_groups[0]['lr'], global_step)
                     writer.add_scalar('Loss/test', val_tot_score, global_step)
-                    writer.add_scalar('Loss/test_CE', val_ce_score, global_step)
+                    writer.add_scalar('Loss/test_seg', val_ce_score, global_step)
                     writer.add_scalar('Loss/test_rec', val_rec_score, global_step)
                     logging.info('\nValidation tot: {}, CE: {}, rec: {}'.
                                  format(val_tot_score, val_ce_score, val_rec_score))
