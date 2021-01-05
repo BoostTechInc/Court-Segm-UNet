@@ -113,6 +113,8 @@ def get_args():
                         help="Sets the way to obtain the mask. Сan take \'warp\' or \'segm\'")
     parser.add_argument('--blend', action='store_true', default=False,
                         help="Whether need to blend the mask and frame or not")
+    parser.add_argument('--img2input', action='store_true', default=False,
+                        help="Whether add an image to regressor input or not")
 
     return parser.parse_args()
 
@@ -122,18 +124,19 @@ if __name__ == "__main__":
 
     # Get params:
     args = get_args()
-    args.model = '/home/darkalert/builds/Court-Segm-UNet/checkpoints/NCAA2020+v2-640x360_aug-app-geo_rec-nc4-deconv-mse-rlam10_pre/CP_epoch6.pth'
+    args.model = '/home/darkalert/builds/Court-Segm-UNet/checkpoints/NCAA2020+v2-640x360_aug-app-geo_nc4-deconv-focal-mse_pre2/CP_epoch7.pth'
     args.temp_path = '/home/darkalert/builds/Court-Segm-UNet/assets/mask_ncaa_v4_nc4_m_onehot.png'
 
     args.src_dir = '/media/darkalert/c02b53af-522d-40c5-b824-80dfb9a11dbb/boost/datasets/player_tracking/frames/'
-    args.dst_dir = '/media/darkalert/c02b53af-522d-40c5-b824-80dfb9a11dbb/boost/datasets/player_tracking/court_mapping_mse_segm/'
+    args.dst_dir = '/media/darkalert/c02b53af-522d-40c5-b824-80dfb9a11dbb/boost/datasets/player_tracking/court_mapping_focal/'
 
     args.bilinear = False
     args.n_classes = 4
     args.resnet = 'resnetreg18'
+    args.img2input = True
 
     args.blend = True
-    args.mask_way = 'segm'
+    args.mask_way = 'warp'
 
     # Get videos:
     video_names = [n for n in os.listdir(args.src_dir) if os.path.isdir(os.path.join(args.src_dir, n))]
@@ -158,7 +161,8 @@ if __name__ == "__main__":
                         target_size=args.output_size,
                         bilinear=args.bilinear,
                         resnet_name=args.resnet,
-                        warp_with_nearest=True)
+                        warp_with_nearest=True,
+                        img2input=args.img2input)
     logging.info("Loading model from {}".format(args.model))
     net.to(device=device)
     net.load_state_dict(torch.load(args.model, map_location=device))

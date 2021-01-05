@@ -310,6 +310,8 @@ if __name__ == '__main__':
             args.resnet = conf['resnet']
             if 'pretrained' not in args.resnet:
                 args.resnet['pretrained'] = None
+            if 'img2input' not in args.resnet:
+                args.resnet['img2input'] = False
 
     # CUDA or CPU:
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -330,7 +332,8 @@ if __name__ == '__main__':
                         bilinear=args.bilinear,
                         resnet_name=args.resnet['name'],
                         resnet_pretrained=args.resnet['pretrained'],
-                        warp_with_nearest=False)
+                        warp_with_nearest=False,
+                        img2input=args.resnet['img2input'])
     logging.info(f'Network Reconstructor (UNet+UNetReg+ResNetReg):\n'
                  f'\t{net.n_channels} input channels\n'
                  f'\t{net.n_classes} output channels (classes)\n'

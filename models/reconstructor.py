@@ -20,11 +20,13 @@ class Reconstructor(nn.Module):
                  bilinear=True,
                  resnet_name='resnetreg50',
                  resnet_pretrained=None,
-                 warp_with_nearest=False):
+                 warp_with_nearest=False,
+                 img2input=False):
         super(Reconstructor, self).__init__()
         self.n_channels = n_channels
         self.n_classes = n_classes
         self.bilinear = bilinear
+        self.img2input = img2input
 
         # UNet:
         self.inc = DoubleConv(n_channels, 64)
@@ -44,7 +46,8 @@ class Reconstructor(nn.Module):
         # self.unet_reg = Reconstructor.make_regressor(n_classes)
 
         # ResNet regressor that outputs the second 3x3 transformation matrix:
-        self.resnet_reg = resnet(resnet_name, resnet_pretrained, n_classes)
+        in_classes = n_classes+3 if img2input else n_classes
+        self.resnet_reg = resnet(resnet_name, resnet_pretrained, in_classes)
 
         # Court template that will be warped by the learnt transformation matrix:
         self.template = template
@@ -112,7 +115,8 @@ class Reconstructor(nn.Module):
         # rec_mask = self.warp(theta, self.template)
 
         # ResNet regressor:
-        theta = self.resnet_reg(logits)
+        y = torch.cat((logits, x), 1) if self.img2input else logits
+        theta = self.resnet_reg(y)
         rec_mask = self.warp(theta, self.template)
 
         return logits, rec_mask, theta
@@ -121,7 +125,8 @@ class Reconstructor(nn.Module):
         '''Predicts the transformation matrix (theta) from input image (x).
         If warp is True then it also warps the template using the predicted theta'''
         logits, x_top = self.forward_unet(x)
-        theta = self.resnet_reg(logits)
+        y = torch.cat((logits, x), 1) if self.img2input else logits
+        theta = self.resnet_reg(y)
 
         if warp:
             rec_mask = self.warp(theta, self.template)
