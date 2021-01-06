@@ -24,13 +24,13 @@ def train_net(net, device, img_dir, mask_dir, val_names,  num_classes,
               seg_loss, rec_loss, seg_lambda, rec_lambda, homo_lambda,
               homo_dir=None, opt='RMSprop', aug=None, cp_dir=None, log_dir=None,
               epochs=5, batch_size=1, lr=0.0001, w_decay=1e-8,
-              target_size=(1280,720),
+              target_size=(1280,720), only_ncaam=False,
               vizualize=False):
     '''
     Train UNet+UNetReg+ResNetReg model
     '''
     # Prepare dataset:
-    train_ids, val_ids = split_on_train_val(img_dir, val_names)
+    train_ids, val_ids = split_on_train_val(img_dir, val_names, only_ncaam=only_ncaam)
     train = BasicDataset(train_ids, img_dir, mask_dir, num_classes, target_size, aug=aug, homo_dir=homo_dir)
     val = BasicDataset(val_ids, img_dir, mask_dir, num_classes, target_size, homo_dir=homo_dir)
     train_loader = DataLoader(train, batch_size=batch_size, shuffle=True, num_workers=8,
@@ -290,6 +290,9 @@ def get_args():
                         help='Whether to use MSE or SmoothL1 as reconstruction loss')
     parser.add_argument('--seg_loss', type=str, default='CE',
                         help='Segmentation loss. Can be \'CE\' (Cross Entropy) or \'focal\' (Focal loss)')
+    parser.add_argument('--only_ncaam', action='store_true',
+                        help="Use only NCAAM dataset for training",
+                        default=False)
 
     return parser.parse_args()
 
@@ -381,6 +384,7 @@ if __name__ == '__main__':
                   lr=args.lr,
                   w_decay=args.weight_decay,
                   target_size=args.size,
+                  only_ncaam=args.only_ncaam,
                   vizualize=args.viz)
     except KeyboardInterrupt:
         save_model()

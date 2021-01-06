@@ -17,7 +17,7 @@ def worker_init_fn(worker_id):
     '''
     np.random.seed(np.random.get_state()[1][0] + worker_id)
 
-def split_on_train_val(img_dir, val_names):
+def split_on_train_val(img_dir, val_names, only_ncaam=False):
     '''
     Split a dataset on training and validation ids
     '''
@@ -32,6 +32,9 @@ def split_on_train_val(img_dir, val_names):
         if any(name == n for n in val_names):
             val_ids += ids
         else:
+            if only_ncaam and name[0] == '2':
+                print('Skip', name)
+                continue
             train_ids += ids
 
     logging.info(f'Data has been splitted. Train ids: {len(train_ids)}, val ids: {len(val_ids)}')

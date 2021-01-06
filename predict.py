@@ -124,11 +124,11 @@ if __name__ == "__main__":
 
     # Get params:
     args = get_args()
-    args.model = '/home/darkalert/builds/Court-Segm-UNet/checkpoints/NCAA2020+v2-640x360_aug-app-geo_nc4-deconv-focal-mse_pre2/CP_epoch7.pth'
+    args.model = '/home/darkalert/builds/Court-Segm-UNet/checkpoints/NCAA2020+v2-640x360_aug_nc4+3-deconv-resnet18-focal-MSE_pre2/CP_epoch7.pth'
     args.temp_path = '/home/darkalert/builds/Court-Segm-UNet/assets/mask_ncaa_v4_nc4_m_onehot.png'
 
     args.src_dir = '/media/darkalert/c02b53af-522d-40c5-b824-80dfb9a11dbb/boost/datasets/player_tracking/frames/'
-    args.dst_dir = '/media/darkalert/c02b53af-522d-40c5-b824-80dfb9a11dbb/boost/datasets/player_tracking/court_mapping_focal/'
+    args.dst_dir = '/media/darkalert/c02b53af-522d-40c5-b824-80dfb9a11dbb/boost/datasets/player_tracking/NCAA2020+v2-640x360_aug_nc4+3-deconv-resnet18-focal-MSE_pre2/'
 
     args.bilinear = False
     args.n_classes = 4
