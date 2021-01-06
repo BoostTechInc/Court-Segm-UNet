@@ -99,7 +99,7 @@ def eval_reconstructor(net, loader, device, verbose=False):
 
     net.train()
 
-    result = {'val_ce_score': ce_score/n_val,
+    result = {'val_seg_score': ce_score/n_val,
               'val_rec_score': rec_score/n_val}
     if verbose:
         result['imgs'] = imgs.cpu()

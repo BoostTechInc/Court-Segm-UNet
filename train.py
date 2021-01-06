@@ -130,31 +130,31 @@ def train_net(net, device, img_dir, mask_dir, val_names,  num_classes,
                 logits, rec_masks, homos = net(imgs)
 
                 # Caluclate CrossEntropy loss:
-                ce_loss = criterion(logits, true_masks)
+                seg_loss = criterion(logits, true_masks) * seg_lambda
 
                 # Calculate reconstruction loss for regressors:
                 gt_masks = true_masks.to(dtype=torch.float32) / float(num_classes)
-                rec_loss = rec_criterion(rec_masks, gt_masks)
+                rec_loss = rec_criterion(rec_masks, gt_masks) * rec_lambda
 
                 # Calculate a regression loss for homography:
                 if homo_criterion is not None and gt_homos is not None:
-                    homo_loss = homo_criterion(homos, gt_homos)
+                    homo_loss = homo_criterion(homos, gt_homos) * homo_lambda
                 else:
                     homo_loss = None
 
                 # Total loss:
-                loss = ce_loss * seg_lambda + rec_loss * rec_lambda
+                loss = seg_loss + rec_loss
                 if homo_loss is not None:
-                    loss += homo_loss * homo_lambda
+                    loss += homo_loss
                 epoch_loss += loss.item()
 
                 # Log:
                 writer.add_scalar('Loss/train', loss.item(), global_step)
-                writer.add_scalar('Loss/train seg', ce_loss.item(), global_step)
+                writer.add_scalar('Loss/train seg', seg_loss.item(), global_step)
                 writer.add_scalar('Loss/train rec', rec_loss.item(), global_step)
                 if homo_loss is not None:
                     writer.add_scalar('Loss/train homo', homo_loss.item(), global_step)
-                pbar.set_postfix(**{'Seg_loss': ce_loss.item(),
+                pbar.set_postfix(**{'Seg_loss': seg_loss.item(),
                                     'Rec_loss': rec_loss.item(),
                                     'Homo_loss': homo_loss.item() if homo_loss is not None else 0,
                                     'Tot loss': loss.item(),})
@@ -171,14 +171,14 @@ def train_net(net, device, img_dir, mask_dir, val_names,  num_classes,
                 # Validation step:
                 if global_step % (n_train // (5 * batch_size)) == 0:
                     for tag, value in net.named_parameters():
-                        tag = tag.replace('.', '/')
-                        writer.add_histogram('weights/' + tag, value.data.cpu().numpy(), global_step)
+                        t = tag.replace('.', '/')
+                        writer.add_histogram('weights/' + t, value.data.cpu().numpy(), global_step)
                         if value.grad is not None:
-                            writer.add_histogram('grads/' + tag, value.grad.data.cpu().numpy(), global_step)
+                            writer.add_histogram('grads/' + t, value.grad.data.cpu().numpy(), global_step)
 
                     # Evaluate:
                     result = eval_reconstructor(net, val_loader, device, verbose=vizualize)
-                    val_ce_score = result['val_ce_score']
+                    val_ce_score = result['val_seg_score']
                     val_rec_score = result['val_rec_score']
                     val_tot_score = val_ce_score + val_rec_score
                     scheduler.step(val_tot_score)
@@ -188,7 +188,7 @@ def train_net(net, device, img_dir, mask_dir, val_names,  num_classes,
                     writer.add_scalar('Loss/test', val_tot_score, global_step)
                     writer.add_scalar('Loss/test_seg', val_ce_score, global_step)
                     writer.add_scalar('Loss/test_rec', val_rec_score, global_step)
-                    logging.info('\nValidation tot: {}, CE: {}, rec: {}'.
+                    logging.info('\nValidation tot: {}, seg: {}, rec: {}'.
                                  format(val_tot_score, val_ce_score, val_rec_score))
 
                     if vizualize:
