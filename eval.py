@@ -89,13 +89,27 @@ def eval_reconstructor(net, loader, device, verbose=False):
         imgs = imgs.to(device=device, dtype=torch.float32)
         gt = gt.to(device=device, dtype=mask_type)
         gt_masks = gt.to(dtype=torch.float32) / float(net.n_classes)
+        if 'poi' in batch:
+            gt_poi = batch['poi'].to(device=device, dtype=torch.float32)
+        else:
+            gt_poi = None
 
         with torch.no_grad():
-            logits, rec_masks, _ = net(imgs)
+            logits, rec_masks, theta = net(imgs)
 
         # Scores:
         ce_score += F.cross_entropy(logits, gt).item()
         rec_score += F.mse_loss(rec_masks, gt_masks).item()
+
+        if gt_poi is not None:
+            # Project the court PoI via the predicted homography:
+            theta = theta.squeeze(1)
+            print (theta.shape, net.court_poi.shape)
+            proj_poi = torch.matmul(theta, net.court_poi)
+            print ('proj_poi',proj_poi.shape)
+            x = proj_poi[:,0] / proj_poi[:,2]
+            y = proj_poi[:,1] / proj_poi[:,2]
+            print ('x,y', x.shape, y.shape)
 
     net.train()
 

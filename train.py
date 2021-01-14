@@ -10,7 +10,7 @@ import torch
 import torch.nn as nn
 from torch import optim
 from torch.utils.tensorboard import SummaryWriter
-from utils.dataset import BasicDataset, split_on_train_val, worker_init_fn, load_template
+from utils.dataset import BasicDataset, split_on_train_val, worker_init_fn, open_court_template, open_court_poi
 from torch.utils.data import DataLoader
 import kornia
 
@@ -21,8 +21,9 @@ from utils.postprocess import preds_to_masks, onehot_to_image
 
 
 def train_net(net, device, img_dir, mask_dir, val_names,  num_classes,
-              seg_loss, rec_loss, seg_lambda, rec_lambda, homo_lambda,
-              homo_dir=None, opt='RMSprop', aug=None, cp_dir=None, log_dir=None,
+              seg_loss, rec_loss, seg_lambda, rec_lambda, poi_loss, poi_lambda,
+              anno_dir=None, anno_keys=None,
+              opt='RMSprop', aug=None, cp_dir=None, log_dir=None,
               epochs=5, batch_size=1, lr=0.0001, w_decay=1e-8,
               target_size=(1280,720), only_ncaam=False,
               vizualize=False):
@@ -31,8 +32,8 @@ def train_net(net, device, img_dir, mask_dir, val_names,  num_classes,
     '''
     # Prepare dataset:
     train_ids, val_ids = split_on_train_val(img_dir, val_names, only_ncaam=only_ncaam)
-    train = BasicDataset(train_ids, img_dir, mask_dir, num_classes, target_size, aug=aug, homo_dir=homo_dir)
-    val = BasicDataset(val_ids, img_dir, mask_dir, num_classes, target_size, homo_dir=homo_dir)
+    train = BasicDataset(train_ids, img_dir, mask_dir, anno_dir, anno_keys, num_classes, target_size, aug=aug)
+    val = BasicDataset(val_ids, img_dir, mask_dir, anno_dir, anno_keys, num_classes, target_size)
     train_loader = DataLoader(train, batch_size=batch_size, shuffle=True, num_workers=8,
                               pin_memory=True, worker_init_fn=worker_init_fn)
     val_loader = DataLoader(val, batch_size=batch_size, shuffle=False, num_workers=8,
@@ -51,14 +52,16 @@ def train_net(net, device, img_dir, mask_dir, val_names,  num_classes,
         Weight decay:    {w_decay}
         Segmentation:    {seg_loss}
         Reconstruction:  {rec_loss}
+        PoI loss:        {poi_loss}
         Seg Lambda:      {seg_lambda}
         Rec Lambda:      {rec_lambda}
-        Homo Lambda:     {homo_lambda}
+        PoI Lambda:      {poi_lambda}
         Training size:   {n_train}
         Validation size: {n_val}
         Images dir:      {img_dir}
         Masks dir:       {mask_dir}
-        Homography dir:  {homo_dir}
+        Annotation dir:  {anno_dir}
+        Annotation keys: {anno_keys}
         Checkpoints dir: {cp_dir}
         Log dir:         {log_dir}
         Device:          {device.type}
@@ -97,10 +100,12 @@ def train_net(net, device, img_dir, mask_dir, val_names,  num_classes,
     else:
         raise NotImplementedError
 
-    if homo_dir is not None:
-        homo_criterion = nn.SmoothL1Loss()
+    if poi_loss == 'MSE':
+        poi_criterion = nn.MSELoss()
+    elif poi_loss == 'SmoothL1':
+        poi_criterion = nn.SmoothL1Loss()
     else:
-        homo_criterion = None
+        raise NotImplementedError
 
     global_step = 0
 
@@ -114,7 +119,7 @@ def train_net(net, device, img_dir, mask_dir, val_names,  num_classes,
                 # Get data:
                 imgs = batch['image']
                 true_masks = batch['mask']
-                gt_homos = batch['homo'] if 'homo' in batch else None
+                gt_poi = batch['poi'] if 'poi' in batch else None
                 assert imgs.shape[1] == net.n_channels, \
                     f'Network has been defined with {net.n_channels} input channels, ' \
                     f'but loaded images have {imgs.shape[1]} channels. Please check that ' \
@@ -123,11 +128,11 @@ def train_net(net, device, img_dir, mask_dir, val_names,  num_classes,
                 # CPU -> GPU:
                 imgs = imgs.to(device=device, dtype=torch.float32)
                 true_masks = true_masks.to(device=device)
-                if gt_homos is not None:
-                    gt_homos = gt_homos.to(device=device, dtype=torch.float32)
+                if gt_poi is not None:
+                    gt_poi = gt_poi.to(device=device, dtype=torch.float32)
 
                 # Forward:
-                logits, rec_masks, homos = net(imgs)
+                logits, rec_masks, poi = net(imgs)
 
                 # Caluclate CrossEntropy loss:
                 seg_loss = criterion(logits, true_masks) * seg_lambda
@@ -136,28 +141,24 @@ def train_net(net, device, img_dir, mask_dir, val_names,  num_classes,
                 gt_masks = true_masks.to(dtype=torch.float32) / float(num_classes)
                 rec_loss = rec_criterion(rec_masks, gt_masks) * rec_lambda
 
-                # Calculate a regression loss for homography:
-                if homo_criterion is not None and gt_homos is not None:
-                    homo_loss = homo_criterion(homos, gt_homos) * homo_lambda
-                else:
-                    homo_loss = None
-
                 # Total loss:
                 loss = seg_loss + rec_loss
-                if homo_loss is not None:
-                    loss += homo_loss
-                epoch_loss += loss.item()
 
                 # Log:
                 writer.add_scalar('Loss/train', loss.item(), global_step)
                 writer.add_scalar('Loss/train seg', seg_loss.item(), global_step)
                 writer.add_scalar('Loss/train rec', rec_loss.item(), global_step)
-                if homo_loss is not None:
-                    writer.add_scalar('Loss/train homo', homo_loss.item(), global_step)
-                pbar.set_postfix(**{'Seg_loss': seg_loss.item(),
-                                    'Rec_loss': rec_loss.item(),
-                                    'Homo_loss': homo_loss.item() if homo_loss is not None else 0,
-                                    'Tot loss': loss.item(),})
+                logs = {'Seg_loss': seg_loss.item(), 'Rec_loss': rec_loss.item(), 'Tot loss': loss.item()}
+
+                # Calculate a regression loss for PoI:
+                # if gt_poi is not None:
+                #     poi_loss = poi_criterion(poi, gt_poi) * poi_lambda
+                #     loss += poi_loss
+                #     writer.add_scalar('Loss/train PoI', poi_loss.item(), global_step)
+                #     logs['PoI_loss'] = poi_loss.item()
+
+                epoch_loss += loss.item()
+                pbar.set_postfix(**logs)
 
                 # Backward:
                 optimizer.zero_grad()
@@ -240,8 +241,10 @@ def get_args():
                         help='Path to dir containing traininmg images')
     parser.add_argument('-md', '--mask_dir', dest='mask_dir', type=str, default=None,
                         help='Path to dir containing masks for given images')
-    parser.add_argument('--homo_dir', dest='homo_dir', type=str, default=None,
-                        help='Path to dir containing homography matrices for given images')
+    parser.add_argument('--anno_dir', dest='anno_dir', type=str, default=None,
+                        help='Path to dir containing annotations for given images')
+    parser.add_argument('--anno_keys', dest='anno_keys', type=str, default=None,
+                        help='List of annotation keys that will be used as input data')
     parser.add_argument('-vn', '--val_names', dest='val_names', type=str, default=None,
                         help='List of video names that will be used in validation step')
     parser.add_argument('-cd', '--cp_dir', dest='cp_dir', type=str, default=None,
@@ -260,8 +263,8 @@ def get_args():
                         help='Weighting factor for segmentation loss')
     parser.add_argument('--rec_lambda', type=float, default=10.0,
                         help='Weighting factor for reconstruction loss')
-    parser.add_argument('--homo_lambda', type=float, default=0.01,
-                        help='Weighting factor for homography loss')
+    parser.add_argument('--poi_lambda', type=float, default=1.0,
+                        help='Weighting factor for PoI loss')
     parser.add_argument('-f', '--load', dest='load', type=str, default=False,
                         help='Load model from a .pth file')
     parser.add_argument('-s', '--size', dest='size', default=(640,360),
@@ -282,14 +285,18 @@ def get_args():
                         help='Optimizer for training')
     parser.add_argument('-a', '--aug', dest='aug', type=str, default=None,
                         help='Augmentation')
-    parser.add_argument('-tp', '--temp-path', dest='temp_path', type=str, default=None,
-                        help='Path to court template that will be projected by affine matrix')
+    parser.add_argument('--court-img', dest='court_img', type=str, default=None,
+                        help='Path to court template image that will be projected by affine matrix')
+    parser.add_argument('--court-poi', dest='court_poi', type=str, default=None,
+                        help='Path to court points of interest. Using in reprojection error')
     parser.add_argument('--resnet', type=str, default=None,
                         help='Specify ResNetReg model parameters')
     parser.add_argument('--rec_loss', type=str, default='MSE',
                         help='Whether to use MSE or SmoothL1 as reconstruction loss')
     parser.add_argument('--seg_loss', type=str, default='CE',
                         help='Segmentation loss. Can be \'CE\' (Cross Entropy) or \'focal\' (Focal loss)')
+    parser.add_argument('--poi_loss', type=str, default='MSE',
+                        help='Whether to use MSE or SmoothL1 as PoI loss')
     parser.add_argument('--only_ncaam', action='store_true',
                         help="Use only NCAAM dataset for training",
                         default=False)
@@ -320,18 +327,25 @@ if __name__ == '__main__':
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     logging.info(f'Using device {device}')
 
-    # Load court template:
-    template = load_template(args.temp_path,
-                             num_classes=args.n_classes,
-                             target_size=args.size,
-                             batch_size=args.batchsize)
-    template = template.to(device=device)
+    # Load the court template image and the court points of interest:
+    court_img = open_court_template(args.court_img,
+                                    num_classes=args.n_classes,
+                                    size=args.size,
+                                    batch_size=args.batchsize)
+    court_img = court_img.to(device=device)
+    if args.court_poi is not None:
+        court_poi = open_court_poi(args.court_poi, args.size, args.batchsize)
+        court_poi = court_poi.to(device=device)
+    else:
+        court_poi = None
+
 
     # Init Reconstructor (UNET+RESNET+STN):
     net = Reconstructor(n_channels=args.n_channels,
                         n_classes=args.n_classes,
-                        template=template,
+                        court_img=court_img,
                         target_size=args.size,
+                        court_poi=court_poi,
                         bilinear=args.bilinear,
                         resnet_name=args.resnet['name'],
                         resnet_pretrained=args.resnet['pretrained'],
@@ -375,8 +389,10 @@ if __name__ == '__main__':
                   seg_loss=args.seg_loss,
                   seg_lambda=args.seg_lambda,
                   rec_lambda=args.rec_lambda,
-                  homo_lambda=args.homo_lambda,
-                  homo_dir=args.homo_dir,
+                  poi_loss=args.poi_loss,
+                  poi_lambda=args.poi_lambda,
+                  anno_dir=args.anno_dir,
+                  anno_keys=args.anno_keys,
                   aug=args.aug,
                   opt=args.opt,
                   epochs=args.epochs,

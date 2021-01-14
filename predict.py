@@ -9,7 +9,7 @@ import numpy as np
 from tqdm import tqdm
 
 from models import Reconstructor
-from utils.dataset import BasicDataset, load_template
+from utils.dataset import BasicDataset, open_court_template
 from utils.postprocess import preds_to_masks, onehot_to_image, overlay
 
 
@@ -124,16 +124,25 @@ if __name__ == "__main__":
 
     # Get params:
     args = get_args()
-    args.model = '/home/darkalert/builds/Court-Segm-UNet/checkpoints/NCAA2020+v2-640x360_aug_nc4+3-deconv-resnet18-focal-MSE_pre2/CP_epoch7.pth'
+    # args.model = '/home/darkalert/builds/Court-Segm-UNet/checkpoints/NCAA2020+v2-640x360_aug-app-geo_nc4-deconv-focal-mse_pre2/CP_epoch7.pth'  # best rec
+    # args.model = '/home/darkalert/builds/Court-Segm-UNet/checkpoints/NCAA2020+v2-640x360_aug-app-geo_rec-nc4-deconv-mse-rlam10_pre/CP_epoch6.pth'  # good segm
+    # args.model = '/home/darkalert/builds/Court-Segm-UNet/checkpoints/NCAA2020+v2-640x360_aug_nc4+3-deconv-resnet18-focal-MSE_pre2/CP_epoch7.pth'  # good rec
+    # args.model = '/home/darkalert/builds/Court-Segm-UNet/checkpoints/NCAA2020+v2-640x360_aug_nc4+3-deconv-resnet34-ce-mse_pre/last.pth'           # best segm
+    args.model = '/home/darkalert/builds/Court-Segm-UNet/checkpoints/NCAA+v2-640x360_aug_nc4-deconv-resnet34-focal-mse_seg-pretrain/CP_epoch7.pth'
+    # args.model = '/home/darkalert/builds/Court-Segm-UNet/checkpoints/NCAA+v2-640x360_aug_nc4-deconv-resnet34-ce-mse_seg-pretrain/CP_epoch7.pth'
+    # args.model = '/home/darkalert/builds/Court-Segm-UNet/checkpoints/NCAA2020+v2-640x360_aug_nc4+3-deconv-resnet18-focal-MSE_pre2/CP_epoch7.pth'
+
     args.temp_path = '/home/darkalert/builds/Court-Segm-UNet/assets/mask_ncaa_v4_nc4_m_onehot.png'
 
-    args.src_dir = '/media/darkalert/c02b53af-522d-40c5-b824-80dfb9a11dbb/boost/datasets/player_tracking/frames/'
-    args.dst_dir = '/media/darkalert/c02b53af-522d-40c5-b824-80dfb9a11dbb/boost/datasets/player_tracking/NCAA2020+v2-640x360_aug_nc4+3-deconv-resnet18-focal-MSE_pre2/'
+    # args.src_dir = '/media/darkalert/c02b53af-522d-40c5-b824-80dfb9a11dbb/boost/datasets/player_tracking/frames/'
+    # args.dst_dir = '/media/darkalert/c02b53af-522d-40c5-b824-80dfb9a11dbb/boost/datasets/player_tracking/NCAA2020+v2-640x360_aug_nc4+3-deconv-resnet34-ce-mse_pre/'
+    args.src_dir = '/media/darkalert/c02b53af-522d-40c5-b824-80dfb9a11dbb/boost/demo2021/frames/'
+    args.dst_dir = '/media/darkalert/c02b53af-522d-40c5-b824-80dfb9a11dbb/boost/demo2021/test/NCAA+v2-640x360_aug_nc4-deconv-resnet34-focal-mse_seg-pretrain/'
 
     args.bilinear = False
     args.n_classes = 4
-    args.resnet = 'resnetreg18'
-    args.img2input = True
+    args.resnet = 'resnetreg34'
+    args.img2input = False
 
     args.blend = True
     args.mask_way = 'warp'
@@ -147,17 +156,17 @@ if __name__ == "__main__":
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     logging.info(f'Using device {device}')
 
-    # Load the court template:
-    template = load_template(args.temp_path,
-                             num_classes=args.n_classes,
-                             target_size=args.output_size,
-                             batch_size=1)
-    template = template.to(device=device)
+    # Load the court template image:
+    court_img = open_court_template(args.temp_path,
+                                   num_classes=args.n_classes,
+                                   size=args.output_size,
+                                   batch_size=1)
+    court_img = court_img.to(device=device)
 
     # Load a Reconstructor model (UNET+RESNET+STN):
     net = Reconstructor(n_channels=args.n_channels,
                         n_classes=args.n_classes,
-                        template=template,
+                        court_img=court_img,
                         target_size=args.output_size,
                         bilinear=args.bilinear,
                         resnet_name=args.resnet,

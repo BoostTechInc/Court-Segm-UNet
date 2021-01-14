@@ -15,8 +15,9 @@ class Reconstructor(nn.Module):
     def __init__(self,
                  n_channels,
                  n_classes,
-                 template,
+                 court_img,
                  target_size,
+                 court_poi=None,
                  bilinear=True,
                  resnet_name='resnetreg50',
                  resnet_pretrained=None,
@@ -49,8 +50,10 @@ class Reconstructor(nn.Module):
         in_classes = n_classes+3 if img2input else n_classes
         self.resnet_reg = resnet(resnet_name, resnet_pretrained, in_classes)
 
-        # Court template that will be warped by the learnt transformation matrix:
-        self.template = template
+        # The court template image and court points of interest.
+        # This court template will be warped by the learnt transformation matrix:
+        self.court_img = court_img
+        self.court_poi = court_poi
 
         # STN warper:
         h, w = target_size[1], target_size[0]
@@ -73,10 +76,10 @@ class Reconstructor(nn.Module):
 
         return reg
 
-    def warp(self, theta, template):
+    def warp(self, theta, court_img):
         '''Warp teamplate by predicted homographies'''
         bs = theta.shape[0]
-        template = template[0:bs]
+        template = court_img[0:bs]
 
         warped = self.warper(template, theta)
 
@@ -112,24 +115,24 @@ class Reconstructor(nn.Module):
 
         # UNet regressor:
         # theta = self.regress(x_top)
-        # rec_mask = self.warp(theta, self.template)
+        # rec_mask = self.warp(theta, self.court_img)
 
         # ResNet regressor:
         y = torch.cat((logits, x), 1) if self.img2input else logits
         theta = self.resnet_reg(y)
-        rec_mask = self.warp(theta, self.template)
+        rec_mask = self.warp(theta, self.court_img)
 
         return logits, rec_mask, theta
 
     def predict(self, x, warp=False):
         '''Predicts the transformation matrix (theta) from input image (x).
-        If warp is True then it also warps the template using the predicted theta'''
+        If warp is True then it also warps the court_img using the predicted theta'''
         logits, x_top = self.forward_unet(x)
         y = torch.cat((logits, x), 1) if self.img2input else logits
         theta = self.resnet_reg(y)
 
         if warp:
-            rec_mask = self.warp(theta, self.template)
+            rec_mask = self.warp(theta, self.court_img)
         else:
             rec_mask = None
 
